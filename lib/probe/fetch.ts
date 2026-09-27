@@ -3,14 +3,27 @@ import type { RawResponse } from './analyze';
 export const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
 
+/** Headers the probe sets. Node's fetch (undici) adds its own on top, see UNDICI_ADDED_HEADERS. */
+export function requestHeaders(userAgent: string): Record<string, string> {
+  return {
+    'user-agent': userAgent,
+    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+  };
+}
+
+/** Sent by undici whatever we ask: part of what the sites see, reported with the results. */
+export const UNDICI_ADDED_HEADERS = ['sec-fetch-mode: cors', 'accept-encoding: gzip, deflate', 'connection: keep-alive'];
+
 const KEPT_HEADERS = [
   'content-type',
+  'content-length',
   'content-encoding',
+  'location',
   'server',
   'via',
   'x-cache',
   'x-datadome',
-  'x-datadome-cid',
   'x-dd-b',
   'cf-ray',
   'cf-cache-status',
@@ -20,6 +33,15 @@ const KEPT_HEADERS = [
   'x-akamai-transformed',
   'retry-after',
 ] as const;
+
+/** Present or not, never the value: it carries the DataDome client id, like the cookie. */
+const PRESENCE_ONLY_HEADERS = ['x-datadome-cid'] as const;
+
+export type HopMeta = {
+  status: number;
+  headers: Record<string, string>;
+  cookieNames: string[];
+};
 
 export type FetchOptions = {
   userAgent: string;
@@ -43,17 +65,31 @@ export type FetchOutcome =
       kind: 'redirect-off-listing';
       finalUrl: string;
       redirects: string[];
-      status: number;
       location: string;
+      ttfbMs: number;
       durationMs: number;
+      hop: HopMeta;
     }
-  | { kind: 'error'; error: string; durationMs: number; redirects: string[] };
+  | {
+      kind: 'error';
+      error: string;
+      /** A redirect back to an already visited URL that sets a cookie: a cookie check. */
+      cookieLoop: boolean;
+      redirects: string[];
+      ttfbMs: number | null;
+      durationMs: number;
+      /** Last response received before the error, if any (e.g. a body that stalled). */
+      hop: HopMeta | null;
+    };
 
 function pickHeaders(headers: Headers): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of KEPT_HEADERS) {
     const value = headers.get(name);
     if (value !== null) out[name] = value.slice(0, 200);
+  }
+  for (const name of PRESENCE_ONLY_HEADERS) {
+    if (headers.has(name)) out[name] = 'présent';
   }
   return out;
 }
@@ -105,55 +141,84 @@ function decode(bytes: Uint8Array, contentType: string | undefined): string {
   }
 }
 
+function describeError(err: unknown, timeoutMs: number): string {
+  if (!(err instanceof Error)) return String(err);
+  if (err.name === 'TimeoutError' || err.name === 'AbortError') return `délai dépassé (${timeoutMs} ms)`;
+  const cause = err.cause instanceof Error ? ` (${err.cause.message})` : '';
+  return `${err.name}: ${err.message}${cause}`;
+}
+
 /**
- * One GET of one listing page. The body stays in memory for analysis only:
- * it is never logged, stored or returned (rule 2).
+ * One GET of one listing page, following redirects only while they stay on a
+ * listing of the same platform. The body stays in memory for analysis only: it is
+ * never logged, stored or returned (rule 2). No cookie is ever sent back.
  */
 export async function fetchListing(url: URL, opts: FetchOptions): Promise<FetchOutcome> {
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
   const signal = AbortSignal.timeout(opts.timeoutMs);
   const redirects: string[] = [];
+  const visited = new Set<string>([url.href]);
   let current = url;
+  let hop: HopMeta | null = null;
+  let ttfbMs: number | null = null;
 
   try {
-    for (let hop = 0; ; hop++) {
+    for (let n = 0; ; n++) {
+      // No `cache` option: undici would turn it into pragma/cache-control request
+      // headers. The route sets fetchCache = 'force-no-store' so Next caches nothing.
       const res = await fetch(current, {
         method: 'GET',
         redirect: 'manual',
         signal,
-        cache: 'no-store',
-        headers: {
-          'user-agent': opts.userAgent,
-          accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-        },
+        headers: requestHeaders(opts.userAgent),
       });
-      const ttfbMs = elapsed();
+      ttfbMs ??= elapsed();
+      hop = { status: res.status, headers: pickHeaders(res.headers), cookieNames: cookieNames(res.headers) };
 
       const location = res.headers.get('location');
       if (res.status >= 300 && res.status < 400 && location) {
         await res.body?.cancel();
         const target = new URL(location, current);
+        if (visited.has(target.href)) {
+          return {
+            kind: 'error',
+            error: `redirection en boucle vers ${target.href}${hop.cookieNames.length ? ` avec cookie (${hop.cookieNames.join(', ')})` : ''}`,
+            cookieLoop: hop.cookieNames.length > 0,
+            redirects,
+            ttfbMs,
+            durationMs: elapsed(),
+            hop,
+          };
+        }
         if (!opts.followRedirect(target)) {
           return {
             kind: 'redirect-off-listing',
             finalUrl: current.href,
             redirects,
-            status: res.status,
             location: target.href,
+            ttfbMs,
             durationMs: elapsed(),
+            hop,
           };
         }
-        if (hop >= opts.maxRedirects) {
-          return { kind: 'error', error: `plus de ${opts.maxRedirects} redirections`, durationMs: elapsed(), redirects };
+        if (n >= opts.maxRedirects) {
+          return {
+            kind: 'error',
+            error: `plus de ${opts.maxRedirects} redirections`,
+            cookieLoop: false,
+            redirects,
+            ttfbMs,
+            durationMs: elapsed(),
+            hop,
+          };
         }
+        visited.add(target.href);
         redirects.push(target.href);
         current = target;
         continue;
       }
 
-      const headers = pickHeaders(res.headers);
       const { bytes, total, truncated } = await readCapped(res, opts.maxBytes);
       return {
         kind: 'response',
@@ -162,22 +227,22 @@ export async function fetchListing(url: URL, opts: FetchOptions): Promise<FetchO
         ttfbMs,
         durationMs: elapsed(),
         raw: {
-          status: res.status,
-          headers,
-          cookieNames: cookieNames(res.headers),
-          body: decode(bytes, headers['content-type']),
+          ...hop,
+          body: decode(bytes, hop.headers['content-type']),
           bytes: total,
           truncated,
         },
       };
     }
   } catch (err) {
-    const error =
-      err instanceof Error
-        ? err.name === 'TimeoutError' || err.name === 'AbortError'
-          ? `délai dépassé (${opts.timeoutMs} ms)`
-          : `${err.name}: ${err.message}${err.cause instanceof Error ? ` (${err.cause.message})` : ''}`
-        : String(err);
-    return { kind: 'error', error, durationMs: elapsed(), redirects };
+    return {
+      kind: 'error',
+      error: describeError(err, opts.timeoutMs),
+      cookieLoop: false,
+      redirects,
+      ttfbMs,
+      durationMs: elapsed(),
+      hop,
+    };
   }
 }
