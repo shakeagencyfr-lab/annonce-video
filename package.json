@@ -11,7 +11,11 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "make-video": "tsx cli/make-video.ts",
+    "bookmarklet": "tsx scripts/print-bookmarklet.ts",
+    "render-sample": "tsx scripts/render-sample.ts",
+    "remotion:studio": "remotion studio remotion/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.128.0",

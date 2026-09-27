@@ -55,7 +55,7 @@ Le rendu est long (1 à 3 min) : il passe par une **file de tâches** (table `jo
 
 ## Plateformes
 
-Tests faits à la main le 27/09/2026 avec un outil de lecture externe, **pas encore depuis Vercel** (c'est l'étape 0).
+Tests faits à la main le 27/09/2026 avec un outil de lecture externe. **Depuis Vercel (étape 0, même jour)** : pages Leboncoin, SeLoger et La Centrale bloquées par DataDome, PAP par Cloudflare ; AutoScout24.fr lisible ; toutes les photos téléchargeables. Direction validée : AutoScout24 lu par le serveur, Leboncoin et SeLoger exportés depuis le navigateur du vendeur (favori, puis extension Chrome), formulaire de secours sur mobile. Détails : `docs/etape-0.md`.
 
 | Plateforme | Vertical | Format d'URL | Ce que la page contient | Vidéo dans l'annonce | Version |
 |---|---|---|---|---|---|
@@ -89,6 +89,7 @@ type VehicleSheet = {
   city?: string; postalCode?: string;
   sellerType: 'pro' | 'particulier'; sellerName?: string; sellerSiren?: string;
   warranty?: string; equipment: string[]; description?: string;
+  phone?: string; // seulement s'il figure dans l'annonce ou si le vendeur le donne
   photos: Photo[];
 };
 
@@ -102,6 +103,7 @@ type PropertySheet = {
   dpe?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'; ges?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
   features: string[]; description?: string;
   agencyName?: string; agencySiret?: string;
+  phone?: string;
   photos: Photo[];
 };
 
@@ -204,7 +206,8 @@ Chaque étape se termine par son critère de fin. Ne pas passer à la suivante s
 
 ### Étape 1 — Prototype en ligne de commande, auto
 
-- `npm run make-video -- <url-leboncoin-auto>` : lecture → fiche → tri des photos → script → voix → rendu local Remotion des deux formats → coût total affiché.
+- `npm run make-video -- <source>` : lecture → fiche → tri des photos → script → voix → rendu local Remotion des deux formats → coût total affiché. `<source>` : une annonce Leboncoin auto exportée avec le favori (`npm run bookmarklet`), un lien AutoScout24.fr, ou une fiche JSON. Schéma validé par zod dans `lib/sheet.ts`.
+- `--offline` : sans Claude ni ElevenLabs (script tiré de la fiche, vidéo muette), pour tester la chaîne sans clés.
 - **Critère de fin** : deux MP4 lisibles, sous-titres calés, aucune information inventée (vérifiée contre la fiche).
 
 ### Étape 2 — Modèle immo
