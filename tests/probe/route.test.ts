@@ -16,6 +16,7 @@ describe('GET /api/probe', () => {
     fetchMock = vi.fn(async () => new Response('blocked', { status: 403 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -32,6 +33,12 @@ describe('GET /api/probe', () => {
       expect((await GET(request())).status).toBe(404);
     }
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts PROBE_ENABLED=true as well as 1', async () => {
+    vi.stubEnv('PROBE_ENABLED', ' TRUE ');
+    const { GET } = await loadRoute();
+    expect((await GET(request('?platform=pap'))).status).toBe(200);
   });
 
   it('requires the token header when PROBE_TOKEN is set', async () => {

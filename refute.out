@@ -1,0 +1,8 @@
+preview no PROBE_ENABLED -> 404, fetches=0
+token set, missing header -> 404, fetches=0
+HEAD -> 405
+valid -> 200, fetch urls=["https://www.leboncoin.fr/ad/voitures/111"]
+title/phone in body: false
+second call within cooldown -> 429, new fetches=0
+3 concurrent -> 200,429,429, new fetches=1
+PROBE_ENABLED=1, no PROBE_TOKEN -> 200

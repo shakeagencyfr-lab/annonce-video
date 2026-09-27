@@ -36,9 +36,16 @@ function tokenMatches(expected: string, given: string | null): boolean {
 }
 
 export async function GET(req: NextRequest) {
-  if (process.env.PROBE_ENABLED !== '1') return notFound();
+  // The caller only ever sees a 404; the reason goes to the logs (never a value).
+  if (!['1', 'true'].includes((process.env.PROBE_ENABLED ?? '').trim().toLowerCase())) {
+    console.warn('probe: 404, PROBE_ENABLED is not 1');
+    return notFound();
+  }
   const token = process.env.PROBE_TOKEN;
-  if (token && !tokenMatches(token, req.headers.get('x-probe-token'))) return notFound();
+  if (token && !tokenMatches(token, req.headers.get('x-probe-token'))) {
+    console.warn('probe: 404, PROBE_TOKEN is set and the x-probe-token header is missing or wrong');
+    return notFound();
+  }
 
   const now = Date.now();
   if (running || now - lastRunAt < COOLDOWN_MS) {

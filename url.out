@@ -1,0 +1,20 @@
+"https://WWW.LEBONCOIN.FR/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.leboncoin.fr./ad/voitures/1" -> https://www.leboncoin.fr./ad/voitures/1 => REJECT
+"https:\\\\www.leboncoin.fr\\ad\\voitures\\1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https:www.leboncoin.fr/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://ｗｗｗ.leboncoin.fr/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.lebonсoin.fr/ad/voitures/1" -> https://www.xn--lebonoin-jch.fr/ad/voitures/1 => REJECT
+"https://www.leboncoin.fr:443/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.leboncoin.fr/recherche/%2e%2e/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.leboncoin.fr/ad/voitures/1?next=https://evil.example/&cb=123" -> https://www.leboncoin.fr/ad/voitures/1?next=https://evil.example/&cb=123 => leboncoin-auto
+"https://www.leboncoin.fr/ad/voitures/1%2F..%2F..%2Frecherche" -> https://www.leboncoin.fr/ad/voitures/1%2F..%2F..%2Frecherche => REJECT
+"https://@www.leboncoin.fr/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.leboncoin.fr\t/ad/voitures/1" -> https://www.leboncoin.fr/ad/voitures/1 => leboncoin-auto
+"https://www.seloger.com/annonces/achat/appartement/paris" -> https://www.seloger.com/annonces/achat/appartement/paris => REJECT
+"https://www.seloger.com/annonces/locations/appartement/lyon/" -> https://www.seloger.com/annonces/locations/appartement/lyon/ => REJECT
+"https://www.seloger.com/annonce/achat/provence-alpes-cote-d-azur/bouches-du-rhone-13/marseille" -> https://www.seloger.com/annonce/achat/provence-alpes-cote-d-azur/bouches-du-rhone-13/marseille => REJECT
+"https://www.seloger.com/annonces/achat/a/b/c/d/e/f/g/h" -> https://www.seloger.com/annonces/achat/a/b/c/d/e/f/g/h => REJECT
+"https://www.autoscout24.fr/offres/renault" -> https://www.autoscout24.fr/offres/renault => REJECT
+"https://www.autoscout24.fr/offres/renault-clio" -> https://www.autoscout24.fr/offres/renault-clio => REJECT
+"https://www.autoscout24.fr/OFFRES/x" -> https://www.autoscout24.fr/OFFRES/x => REJECT
+targets [null,null,null,null,null,null] rejected 47
