@@ -128,3 +128,25 @@ Question à trancher avant de choisir entre 2 et 3 : les **serveurs d'images**
 (`img.leboncoin.fr`, `mms.seloger.com`…) acceptent-ils Vercel ? Si oui, l'extension n'envoie
 que la fiche et les URL des photos ; si non, elle doit aussi téléverser les photos. Un test
 d'une image par plateforme depuis Vercel suffit pour le savoir.
+
+## Étape 0 bis — Les serveurs d'images acceptent-ils Vercel ?
+
+`GET /api/probe/images` (même garde que `/api/probe` : `PROBE_ENABLED=1`, un appel toutes
+les 30 s). Pour chaque plateforme :
+
+1. **une vraie photo** : prise dans l'annonce si la page est lisible (AutoScout24), sinon
+   passée en paramètre (`img=`, 3 par plateforme au plus, hôtes de photos uniquement), sinon
+   trouvée dans des sources publiques ; elle est téléchargée en entier et reconnue par ses
+   premiers octets (JPEG, WebP, AVIF…), pas par l'en-tête `Content-Type` ;
+2. **un objet témoin** qui ne peut pas exister sur le même hôte : un 404 de l'origine montre
+   qu'aucun anti-robot ne filtre cet hôte, une page DataDome ou Cloudflare montre le contraire.
+
+Verdicts : **accessible** (image reçue), **bloqué** (anti-robot, 401/403/429), **introuvable**
+(404, ou erreur de stockage `AccessDenied`/`NoSuchKey` : image retirée ou signature refusée),
+**erreur**. Aucune image n'est conservée : seuls la taille, le format et les en-têtes utiles
+sont renvoyés.
+
+Pour tester une photo précise : ouvrir l'annonce dans le navigateur, clic droit sur la photo,
+« Copier l'adresse de l'image », puis
+`/api/probe/images?format=md&platform=leboncoin&img=<adresse copiée>` (l'encoder si elle
+contient `&`).

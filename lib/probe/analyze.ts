@@ -13,6 +13,8 @@ export type RawResponse = {
   headers: Record<string, string>;
   cookieNames: string[];
   body: string;
+  /** First bytes of the body, to recognise binary formats. */
+  head?: Uint8Array;
   bytes: number;
   truncated: boolean;
 };

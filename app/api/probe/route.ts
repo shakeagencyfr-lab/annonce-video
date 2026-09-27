@@ -1,6 +1,6 @@
-import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requestHeaders, UNDICI_ADDED_HEADERS } from '@/lib/probe/fetch';
+import { exclusive, headNotAllowed, NO_STORE, refuse } from '@/lib/probe/guard';
 import { toMarkdown } from '@/lib/probe/report';
 import { DEFAULT_CONFIG, probeAll, resolveTargets } from '@/lib/probe/run';
 
@@ -16,49 +16,13 @@ export const maxDuration = 120;
 /** Leaves room to answer before maxDuration; platforms left over are reported "non testé". */
 const BUDGET_MS = 105_000;
 const EXPECTED_REGION = 'cdg1';
-/** Per instance: enough to stop a loop of calls on a preview, not a real rate limit. */
-const COOLDOWN_MS = 30_000;
-
-const NO_STORE = { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' };
-
-let running = false;
-let lastRunAt = 0;
-
-function notFound() {
-  return new NextResponse('Not found', { status: 404, headers: NO_STORE });
-}
-
-function tokenMatches(expected: string, given: string | null): boolean {
-  if (given === null) return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(given);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function GET(req: NextRequest) {
-  // The caller only ever sees a 404; the reason goes to the logs (never a value).
-  if (!['1', 'true'].includes((process.env.PROBE_ENABLED ?? '').trim().toLowerCase())) {
-    console.warn('probe: 404, PROBE_ENABLED is not 1');
-    return notFound();
-  }
-  const token = process.env.PROBE_TOKEN;
-  if (token && !tokenMatches(token, req.headers.get('x-probe-token'))) {
-    console.warn('probe: 404, PROBE_TOKEN is set and the x-probe-token header is missing or wrong');
-    return notFound();
-  }
+  const refused = refuse(req);
+  if (refused) return refused;
 
-  const now = Date.now();
-  if (running || now - lastRunAt < COOLDOWN_MS) {
-    const wait = Math.ceil((running ? COOLDOWN_MS : COOLDOWN_MS - (now - lastRunAt)) / 1000);
-    return new NextResponse(`Un test est en cours ou vient d'avoir lieu, réessayer dans ${wait} s.\n`, {
-      status: 429,
-      headers: { ...NO_STORE, 'retry-after': String(wait) },
-    });
-  }
-  running = true;
-  lastRunAt = now;
-
-  try {
+  return exclusive(async () => {
+    const startedAt = new Date();
     const params = req.nextUrl.searchParams;
     const platformFilter = params
       .getAll('platform')
@@ -103,7 +67,7 @@ export async function GET(req: NextRequest) {
     });
 
     const meta = {
-      probedAt: new Date(now).toISOString(),
+      probedAt: startedAt.toISOString(),
       region,
       node: process.version,
       warnings,
@@ -125,11 +89,7 @@ export async function GET(req: NextRequest) {
       },
       { headers: NO_STORE },
     );
-  } finally {
-    running = false;
-  }
+  });
 }
 
-export function HEAD() {
-  return new NextResponse(null, { status: 405, headers: { ...NO_STORE, allow: 'GET' } });
-}
+export const HEAD = headNotAllowed;

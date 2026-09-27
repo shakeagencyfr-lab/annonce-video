@@ -3,11 +3,14 @@ import type { RawResponse } from './analyze';
 export const DEFAULT_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36';
 
+export const ACCEPT_HTML = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+export const ACCEPT_IMAGE = 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8';
+
 /** Headers the probe sets. Node's fetch (undici) adds its own on top, see UNDICI_ADDED_HEADERS. */
-export function requestHeaders(userAgent: string): Record<string, string> {
+export function requestHeaders(userAgent: string, accept: string = ACCEPT_HTML): Record<string, string> {
   return {
     'user-agent': userAgent,
-    accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    accept,
     'accept-language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
   };
 }
@@ -54,6 +57,8 @@ export type FetchOptions = {
   maxRedirects: number;
   /** Redirects are followed only while this accepts the target (a single listing page). */
   followRedirect: (target: URL) => boolean;
+  /** Accept header; HTML by default. */
+  accept?: string;
 };
 
 export type FetchOutcome =
@@ -145,6 +150,10 @@ function decode(bytes: Uint8Array, contentType: string | undefined): string {
   }
 }
 
+function isText(contentType: string | undefined): boolean {
+  return !contentType || /text\/|html|xml|json|javascript/i.test(contentType);
+}
+
 function describeError(err: unknown, timeoutMs: number): string {
   if (!(err instanceof Error)) return String(err);
   if (err.name === 'TimeoutError' || err.name === 'AbortError') return `délai dépassé (${timeoutMs} ms)`;
@@ -175,7 +184,7 @@ export async function fetchListing(url: URL, opts: FetchOptions): Promise<FetchO
         method: 'GET',
         redirect: 'manual',
         signal,
-        headers: requestHeaders(opts.userAgent),
+        headers: requestHeaders(opts.userAgent, opts.accept),
       });
       ttfbMs ??= elapsed();
       hop = { status: res.status, headers: pickHeaders(res.headers), cookieNames: cookieNames(res.headers) };
@@ -224,6 +233,7 @@ export async function fetchListing(url: URL, opts: FetchOptions): Promise<FetchO
       }
 
       const { bytes, total, truncated } = await readCapped(res, opts.maxBytes);
+      const contentType = hop.headers['content-type'];
       return {
         kind: 'response',
         finalUrl: current.href,
@@ -232,7 +242,9 @@ export async function fetchListing(url: URL, opts: FetchOptions): Promise<FetchO
         durationMs: elapsed(),
         raw: {
           ...hop,
-          body: decode(bytes, hop.headers['content-type']),
+          // Binary content (images) is never decoded: only its first bytes are kept.
+          body: isText(contentType) ? decode(bytes, contentType) : '',
+          head: bytes.subarray(0, 16),
           bytes: total,
           truncated,
         },

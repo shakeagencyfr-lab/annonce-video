@@ -99,3 +99,45 @@ describe('GET /api/probe', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('GET /api/probe/images', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('is off without PROBE_ENABLED, then runs one image per platform and a control', async () => {
+    const fetchMock = vi.fn(async () => new Response('', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    vi.resetModules();
+    let { GET } = await import('@/app/api/probe/images/route');
+    expect((await GET(new NextRequest('http://localhost/api/probe/images'))).status).toBe(404);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    vi.stubEnv('PROBE_ENABLED', '1');
+    vi.stubEnv('VERCEL_REGION', 'cdg1');
+    vi.resetModules();
+    ({ GET } = await import('@/app/api/probe/images/route'));
+    const res = await GET(new NextRequest('http://localhost/api/probe/images?platform=lacentrale&format=md'));
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text).toContain('# Test des images');
+    expect(text).toContain('| La Centrale |');
+    expect(fetchMock).toHaveBeenCalledTimes(2); // the known photo, then the missing-object control
+  });
+
+  it('shares the cooldown with the listing probe', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 404 })));
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    vi.stubEnv('PROBE_ENABLED', '1');
+    vi.resetModules();
+    const listing = await import('@/app/api/probe/route');
+    const images = await import('@/app/api/probe/images/route');
+    expect((await listing.GET(new NextRequest('http://localhost/api/probe?platform=pap'))).status).toBe(200);
+    expect((await images.GET(new NextRequest('http://localhost/api/probe/images?platform=pap'))).status).toBe(429);
+  });
+});
