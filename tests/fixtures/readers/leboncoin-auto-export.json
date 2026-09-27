@@ -1,0 +1,164 @@
+{
+  "source": "leboncoin",
+  "version": 1,
+  "url": "https://www.leboncoin.fr/ad/voitures/3209507340",
+  "exportedAt": "2026-09-27T20:00:00.000Z",
+  "ad": {
+    "list_id": 3209507340,
+    "first_publication_date": "2026-09-20 10:00:00",
+    "status": "active",
+    "category_id": "2",
+    "category_name": "Voitures",
+    "subject": "Peugeot 308 1.2 PureTech 130ch Allure",
+    "body": "Première main, carnet d'entretien à jour.\nContrôle technique OK, véhicule non fumeur.",
+    "ad_type": "offer",
+    "url": "https://www.leboncoin.fr/ad/voitures/3209507340",
+    "price": [
+      15990
+    ],
+    "price_cents": 1599000,
+    "images": {
+      "thumb_url": "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-thumb",
+      "small_url": "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-small",
+      "nb_images": 3,
+      "urls": [
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-image",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/gh/4k/2m/gh4k2m0011223344556677889900aabbccddeeff.jpg?rule=ad-image",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/11/22/33/1122330011223344556677889900aabbccddeeff.jpg?rule=ad-image"
+      ],
+      "urls_thumb": [
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-thumb",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/gh/4k/2m/gh4k2m0011223344556677889900aabbccddeeff.jpg?rule=ad-thumb",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/11/22/33/1122330011223344556677889900aabbccddeeff.jpg?rule=ad-thumb"
+      ],
+      "urls_large": [
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-large",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/gh/4k/2m/gh4k2m0011223344556677889900aabbccddeeff.jpg?rule=ad-large",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/11/22/33/1122330011223344556677889900aabbccddeeff.jpg?rule=ad-large",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-large",
+        "https://evil.example/api/v1/lbcpb1/images/aa/bb/cc/x.jpg"
+      ]
+    },
+    "attributes": [
+      {
+        "key": "u_car_brand",
+        "value": "PEUGEOT",
+        "value_label": "Peugeot",
+        "generic": false
+      },
+      {
+        "key": "u_car_model",
+        "value": "Peugeot_308",
+        "value_label": "308",
+        "generic": false
+      },
+      {
+        "key": "u_car_version",
+        "value": "1.2 PureTech 130ch S&S BVM6",
+        "value_label": "1.2 PureTech 130ch S&S BVM6",
+        "generic": false
+      },
+      {
+        "key": "u_car_finition",
+        "value": "Allure",
+        "value_label": "Allure",
+        "generic": false
+      },
+      {
+        "key": "regdate",
+        "value": "2019",
+        "value_label": "2019",
+        "generic": true
+      },
+      {
+        "key": "issuance_date",
+        "value": "03/2019",
+        "value_label": "03/2019",
+        "generic": true
+      },
+      {
+        "key": "mileage",
+        "value": "68000",
+        "value_label": "68000 km",
+        "generic": true
+      },
+      {
+        "key": "fuel",
+        "value": "1",
+        "value_label": "Essence",
+        "generic": true
+      },
+      {
+        "key": "gearbox",
+        "value": "1",
+        "value_label": "Manuelle",
+        "generic": true
+      },
+      {
+        "key": "horsepower",
+        "value": "7",
+        "value_label": "7 Cv",
+        "generic": true
+      },
+      {
+        "key": "horse_power_din",
+        "value": "130",
+        "value_label": "130 Ch",
+        "generic": true
+      },
+      {
+        "key": "vehicule_color",
+        "value": "gris",
+        "value_label": "Gris",
+        "generic": true
+      },
+      {
+        "key": "critair",
+        "value": "1",
+        "value_label": "1",
+        "generic": true
+      },
+      {
+        "key": "vehicle_specifications",
+        "values": [
+          "rear_camera",
+          "apple_carplay",
+          "cruise_control"
+        ],
+        "values_label": [
+          "Caméra de recul",
+          "Apple CarPlay",
+          "Régulateur de vitesse"
+        ],
+        "generic": true
+      },
+      {
+        "key": "ad_warranty_type",
+        "value": "12_months",
+        "value_label": "Garantie 12 mois",
+        "generic": true
+      }
+    ],
+    "location": {
+      "country_id": "FR",
+      "region_name": "Rhône-Alpes",
+      "department_name": "Rhône",
+      "city_label": "Lyon 69003",
+      "city": "Lyon",
+      "zipcode": "69003",
+      "lat": 45.75,
+      "lng": 4.85,
+      "source": "city",
+      "is_shape": true
+    },
+    "owner": {
+      "store_id": "1000",
+      "user_id": "00000000-test-user",
+      "type": "pro",
+      "name": "Garage des Tests",
+      "siren": "123456789",
+      "no_salesmen": false
+    },
+    "has_phone": true
+  }
+}

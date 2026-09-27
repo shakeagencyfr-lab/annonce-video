@@ -1,0 +1,88 @@
+{
+  "source": "leboncoin",
+  "version": 1,
+  "url": "https://www.leboncoin.fr/ad/ventes_immobilieres/3259370552",
+  "exportedAt": "2026-09-27T20:05:00+02:00",
+  "ad": {
+    "list_id": 3259370552,
+    "category_id": "9",
+    "category_name": "Ventes immobilières",
+    "subject": "Maison 5 pièces 120 m²",
+    "body": "Maison lumineuse avec jardin, proche écoles et commerces.",
+    "url": "https://www.leboncoin.fr/ad/ventes_immobilieres/3259370552",
+    "price": [
+      349000
+    ],
+    "price_cents": 34900000,
+    "images": {
+      "nb_images": 2,
+      "urls_large": [
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/dd/ee/ff/ddeeff0011223344556677889900aabbccddeeff.jpg?rule=ad-large",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/12/34/56/1234560011223344556677889900aabbccddeeff.jpg?rule=ad-large"
+      ],
+      "urls": [
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/dd/ee/ff/ddeeff0011223344556677889900aabbccddeeff.jpg?rule=ad-image",
+        "https://img.leboncoin.fr/api/v1/lbcpb1/images/12/34/56/1234560011223344556677889900aabbccddeeff.jpg?rule=ad-image"
+      ]
+    },
+    "attributes": [
+      {
+        "key": "real_estate_type",
+        "value": "1",
+        "value_label": "Maison",
+        "generic": true
+      },
+      {
+        "key": "square",
+        "value": "120",
+        "value_label": "120 m²",
+        "generic": true
+      },
+      {
+        "key": "land_plot_surface",
+        "value": "500",
+        "value_label": "500 m²",
+        "generic": true
+      },
+      {
+        "key": "rooms",
+        "value": "5",
+        "value_label": "5",
+        "generic": true
+      },
+      {
+        "key": "bedrooms",
+        "value": "3",
+        "value_label": "3",
+        "generic": true
+      },
+      {
+        "key": "energy_rate",
+        "value": "d",
+        "values": [
+          "d"
+        ],
+        "key_label": "Classe énergie",
+        "value_label": "D",
+        "generic": true
+      },
+      {
+        "key": "ges",
+        "value": "b",
+        "value_label": "B",
+        "generic": true
+      }
+    ],
+    "location": {
+      "city_label": "Marseille 13013",
+      "city": "Marseille",
+      "zipcode": "13013"
+    },
+    "owner": {
+      "store_id": "2000",
+      "type": "pro",
+      "name": "Agence des Tests",
+      "siren": "987654321"
+    }
+  }
+}
