@@ -158,8 +158,10 @@ export function detectSignals(raw: RawResponse, visibleChars: number): Signal[] 
   // DataDome (Leboncoin, SeLoger, La Centrale)
   if (/captcha-delivery\.com/i.test(body) || /var\s*dd\s*=\s*\{/.test(body)) {
     add('datadome-challenge', 'strong', dataDomeDetail(body));
-  } else if ('x-dd-b' in headers) {
+  } else if ('x-dd-b' in headers && (status < 200 || status >= 300)) {
     add('datadome-block', 'strong', `DataDome : réponse de blocage (x-dd-b, HTTP ${status})`);
+  } else if ('x-dd-b' in headers) {
+    add('datadome-flag', 'weak', 'DataDome : requête signalée (x-dd-b) mais page servie');
   } else if ('x-datadome' in headers || cookies.has('datadome')) {
     add('datadome-present', 'weak', 'DataDome actif sur le site, page servie');
   }
@@ -183,6 +185,11 @@ export function detectSignals(raw: RawResponse, visibleChars: number): Signal[] 
     add('akamai-challenge', 'strong', 'Akamai Bot Manager : défi');
   } else if (cookies.has('_abck') || cookies.has('ak_bmsc') || cookies.has('bm_sz') || server.includes('akamaighost')) {
     add('akamai-present', 'weak', 'Akamai actif');
+  }
+
+  // AWS WAF (behind CloudFront): its CAPTCHA action answers HTTP 405
+  if (/awswaf\.com|AwsWafIntegration|gokuProps/.test(body) || headers['x-amzn-waf-action'] !== undefined) {
+    add('aws-waf-challenge', 'strong', 'AWS WAF : défi anti-robot');
   }
 
   // CloudFront (AutoScout24, La Centrale)
@@ -227,6 +234,8 @@ export function analyze(platform: ProbePlatform, raw: RawResponse, url: URL): An
   const warnings: string[] = [];
   const strong = signals.filter((s) => s.strength === 'strong');
   const ok = raw.status >= 200 && raw.status < 300;
+  // A page id equal to the URL id is listing evidence too, whatever the page shape.
+  const hasListing = listingData || idMatches === true;
 
   let verdict: Verdict;
   if (GONE_STATUSES.has(raw.status)) {
@@ -235,8 +244,8 @@ export function analyze(platform: ProbePlatform, raw: RawResponse, url: URL): An
   } else if (ok && platform.expired?.test(normalized)) {
     verdict = 'expirée';
     reasons.push('la page indique que l’annonce n’est plus disponible');
-  } else if (ok && listingData && idMatches !== false) {
-    // The listing's own data blob wins over any weak marker.
+  } else if (ok && hasListing && idMatches !== false) {
+    // The listing's own data wins over any marker: a served ad page is not a block page.
     if (price.found && photoCount > 0) {
       verdict = 'lisible';
       reasons.push(
@@ -251,13 +260,13 @@ export function analyze(platform: ProbePlatform, raw: RawResponse, url: URL): An
   } else if (strong.length > 0) {
     verdict = 'bloqué';
     reasons.push(...strong.map((s) => s.detail));
-  } else if (raw.status === 503 && signals.length > 0) {
+  } else if (!ok && signals.some((s) => s.id === 'captcha-word')) {
     verdict = 'bloqué';
-    reasons.push(`HTTP 503 avec protection anti-robot (${signals.map((s) => s.id).join(', ')})`);
+    reasons.push(`HTTP ${raw.status} avec une page de captcha`);
   } else if (!ok) {
     verdict = 'erreur';
     reasons.push(`HTTP ${raw.status} inattendu`);
-  } else if (listingData && idMatches === false) {
+  } else if (hasListing && idMatches === false) {
     verdict = 'partiel';
     reasons.push(`la page servie est l’annonce ${pageId}, pas ${listingKey}`);
   } else if (raw.bytes < INTERSTITIAL_MAX_BYTES || visibleTextChars < 200) {

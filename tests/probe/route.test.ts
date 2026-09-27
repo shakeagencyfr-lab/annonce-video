@@ -81,6 +81,17 @@ describe('GET /api/probe', () => {
     expect(text).toContain('https://example.com/x');
   });
 
+  it('prints French values in the Prix column', async () => {
+    vi.stubEnv('PROBE_ENABLED', '1');
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync(new URL('../fixtures/probe/pap-ok.html', import.meta.url), 'utf8');
+    fetchMock.mockImplementation(async () => new Response(html, { status: 200, headers: { 'content-type': 'text/html' } }));
+    const { GET } = await loadRoute();
+    const text = await (await GET(request('?platform=pap&format=md'))).text();
+    expect(text).toContain('oui (structuré)');
+    expect(text).toContain('**lisible**');
+  });
+
   it('answers 405 to HEAD without probing', async () => {
     vi.stubEnv('PROBE_ENABLED', '1');
     const { HEAD } = await loadRoute();

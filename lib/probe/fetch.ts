@@ -12,8 +12,11 @@ export function requestHeaders(userAgent: string): Record<string, string> {
   };
 }
 
-/** Sent by undici whatever we ask: part of what the sites see, reported with the results. */
-export const UNDICI_ADDED_HEADERS = ['sec-fetch-mode: cors', 'accept-encoding: gzip, deflate', 'connection: keep-alive'];
+/**
+ * Added by undici (Node 22) on every HTTPS request: part of what the sites see, reported
+ * with the results. Measured against a local HTTPS server; tests check the names.
+ */
+export const UNDICI_ADDED_HEADERS = ['sec-fetch-mode: cors', 'accept-encoding: br, gzip, deflate', 'connection: keep-alive'];
 
 const KEPT_HEADERS = [
   'content-type',
@@ -32,6 +35,7 @@ const KEPT_HEADERS = [
   'akamai-grn',
   'x-akamai-transformed',
   'retry-after',
+  'x-amzn-waf-action',
 ] as const;
 
 /** Present or not, never the value: it carries the DataDome client id, like the cookie. */
@@ -113,7 +117,7 @@ async function readCapped(
     const { done, value } = await reader.read();
     if (done) break;
     const room = maxBytes - total;
-    if (value.byteLength >= room) {
+    if (value.byteLength > room) {
       chunks.push(value.subarray(0, room));
       total += room;
       truncated = true;

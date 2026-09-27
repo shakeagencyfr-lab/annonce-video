@@ -1,4 +1,7 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UNDICI_ADDED_HEADERS } from '@/lib/probe/fetch';
 import { PLATFORMS, matchPlatform } from '@/lib/probe/platforms';
 import { DEFAULT_CONFIG, probeAll, probeTarget, resolveTargets, type ProbeTarget } from '@/lib/probe/run';
 
@@ -191,6 +194,24 @@ describe('probeTarget', () => {
     expect(JSON.stringify(r)).not.toContain('DD_CLIENT_TOKEN_abc');
   });
 
+  it('reports "bloqué" when every fresh listing is sent to the homepage', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 302, headers: { location: '/' } })));
+    const r = await probeTarget(lbc(1, 2, 3), DEFAULT_CONFIG);
+    expect(r.attempts).toHaveLength(3);
+    expect(r.verdict).toBe('bloqué');
+    expect(r.reasons.at(-1)).toContain('blocage discret probable');
+  });
+
+  it('stops after the redirect cap even when every hop is a listing', async () => {
+    let n = 1;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 301, headers: { location: `/ad/voitures/${++n}` } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await probeTarget(lbc(1), DEFAULT_CONFIG);
+    expect(fetchMock).toHaveBeenCalledTimes(DEFAULT_CONFIG.maxRedirects + 1);
+    expect(r.verdict).toBe('erreur');
+    expect(r.reasons[0]).toContain(`plus de ${DEFAULT_CONFIG.maxRedirects} redirections`);
+  });
+
   it('tries the next listing only after an expired one', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(page(410)).mockResolvedValueOnce(page(403, 'x')).mockResolvedValueOnce(page(200));
     vi.stubGlobal('fetch', fetchMock);
@@ -222,11 +243,20 @@ describe('probeTarget', () => {
     expect(JSON.stringify(r)).not.toContain('x'.repeat(100));
   });
 
-  it('truncates very large bodies', async () => {
+  it('truncates bodies over the cap, and only those', async () => {
+    const cap = { ...DEFAULT_CONFIG, maxBytes: 1000 };
     vi.stubGlobal('fetch', vi.fn(async () => page(200, 'a'.repeat(5000))));
-    const r = await probeTarget(lbc(1), { ...DEFAULT_CONFIG, maxBytes: 1000 });
-    expect(r.bytes).toBe(1000);
-    expect(r.warnings.some((w: string) => w.includes('tronquée'))).toBe(true);
+    const over = await probeTarget(lbc(1), cap);
+    expect(over.bytes).toBe(1000);
+    expect(over.warnings.some((w: string) => w.includes('tronquée'))).toBe(true);
+
+    vi.stubGlobal('fetch', vi.fn(async () => page(200, 'a'.repeat(1000))));
+    const exact = await probeTarget(lbc(1), cap);
+    expect(exact.bytes).toBe(1000);
+    expect(exact.warnings.some((w: string) => w.includes('tronquée'))).toBe(false);
+
+    vi.stubGlobal('fetch', vi.fn(async () => page(200, 'a'.repeat(1001))));
+    expect((await probeTarget(lbc(1), cap)).warnings.some((w: string) => w.includes('tronquée'))).toBe(true);
   });
 
   it('reports network errors and timeouts', async () => {
@@ -246,5 +276,22 @@ describe('probeTarget', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(results.map((r) => r.verdict)).toEqual(['non testé', 'non testé']);
     expect(results[0]?.reasons[0]).toContain('temps imparti');
+  });
+});
+
+describe('UNDICI_ADDED_HEADERS', () => {
+  it('names headers that Node fetch really adds', async () => {
+    const server = http.createServer((req, res) => res.end(JSON.stringify(req.rawHeaders.map((h) => h.toLowerCase()))));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const res = await fetch(`http://127.0.0.1:${port}/`, { redirect: 'manual', headers: { 'user-agent': 'UA' } });
+      const sent = (await res.json()) as string[];
+      for (const header of UNDICI_ADDED_HEADERS) {
+        expect(sent).toContain(header.split(':', 1)[0]);
+      }
+    } finally {
+      server.close();
+    }
   });
 });

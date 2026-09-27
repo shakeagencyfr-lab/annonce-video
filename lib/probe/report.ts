@@ -41,7 +41,7 @@ export function toMarkdown(results: readonly ProbeResult[], meta: ReportMeta): s
           r.status === null ? '—' : String(r.status),
           kb(r.bytes),
           r.durationMs === null ? '—' : `${r.durationMs} ms`,
-          r.price.found ? `oui (${r.price.source})` : 'non',
+          r.price.found ? (r.price.source === 'structured' ? 'oui (structuré)' : 'oui (texte)') : 'non',
           r.declaredPhotoCount === null ? String(r.photoCount) : `${r.photoCount} / ${r.declaredPhotoCount}`,
           r.embeddedData.join(', ') || '—',
           r.vertical === 'immo' ? (r.dpe ?? 'absent') : '—',

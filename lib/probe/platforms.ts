@@ -68,7 +68,8 @@ const LEBONCOIN = {
   label: 'Leboncoin',
   release: 'V1',
   hosts: ['www.leboncoin.fr', 'leboncoin.fr'],
-  listingData: /"page"\s*:\s*"(?:\/ad\/\[cat\]\/\[id\]|\/ClassifiedAd)"/,
+  // The ad object itself, or the Next.js route of an ad page (both seen in 2021-2026 pages).
+  listingData: /"ad"\s*:\s*\{[^{}]{0,300}?"list_id"\s*:\s*\d+|"page"\s*:\s*"(?:\/ad\/\[[a-z]+\]\/\[id\]|\/ClassifiedAd)"/,
   listingKey: lastPathNumber,
   pageId: /"list_id"\s*:\s*(\d+)/,
   photo: /img\.leboncoin\.fr\/api\/v1\/lbcpb1\/images\/([0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{40})\.jpg/gi,
@@ -153,7 +154,8 @@ export const PLATFORMS: readonly ProbePlatform[] = [
       'https://www.seloger.com/annonce/achat/provence-alpes-cote-d-azur/bouches-du-rhone-13/marseille-13000/265MSJKKI63I',
     ],
     listingData: /"app_cldp"\s*:\s*\{\s*"data"\s*:\s*\{\s*"classified"\s*:\s*\{/,
-    expired: /classified not available|"statusCode"\s*:\s*410\b/,
+    // Scoped to the listing app: other micro-apps of the same blob carry their own errors.
+    expired: /"app_cldp"\s*:\s*\{\s*"data"\s*:\s*null\s*,\s*"error"\s*:\s*\{[^}]*(?:"statusCode"\s*:\s*410\b|classified not available)/,
     photo: /mms\.seloger\.com\/([0-9a-z/_-]+?)\.(?:jpe?g|png|webp)/gi,
     photoKey: (m) => m[1] ?? null,
     declaredPhotos: /"photos_nb"\s*:\s*(\d+)/,
@@ -199,7 +201,10 @@ export const PLATFORMS: readonly ProbePlatform[] = [
       'https://www.pap.fr/annonces/appartement-marseille-4e-13004-r464202421',
     ],
     listingData: /"@type"\s*:\s*"Product"|class="[^"]*\bitem-price\b/,
-    expired: /rel="canonical"\s+href="https:\/\/www\.pap\.fr\/annonce\//,
+    // A removed listing serves the search page, whose canonical is /annonce/ (singular).
+    expired: /<link(?=[^>]*\brel=["']canonical["'])[^>]*\bhref=["']https:\/\/www\.pap\.fr\/annonce\//i,
+    listingKey: lastPathNumber,
+    pageId: /<link(?=[^>]*\brel=["']canonical["'])[^>]*\bhref=["'][^"']*?-r(\d+)\/?["']/i,
     photo: /cdn\.pap\.fr\/photos\/pap\/(?:[0-9a-f]{2}\/){2}([0-9a-f]{32})\/[0-9a-f]+-p\d+\.(?:webp|jpe?g)/gi,
     photoKey: (m) => m[1] ?? null,
     price: [

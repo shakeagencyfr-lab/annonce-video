@@ -6,7 +6,13 @@ export type ProbeTarget = { platform: ProbePlatform; urls: URL[] };
 
 export type Rejected = { input: string; reason: string };
 
-export type Attempt = { url: string; status: number | null; verdict: Analysis['verdict']; durationMs: number | null };
+export type Attempt = {
+  url: string;
+  status: number | null;
+  verdict: Analysis['verdict'];
+  durationMs: number | null;
+  redirectedHome: boolean;
+};
 
 export type ProbeResult = Omit<Analysis, 'verdict'> & {
   platform: PlatformId;
@@ -25,6 +31,8 @@ export type ProbeResult = Omit<Analysis, 'verdict'> & {
   verdict: Analysis['verdict'];
   /** Every listing tried for this platform, in order (next one only after an expired one). */
   attempts: Attempt[];
+  /** The listing URL answered with a redirect to the site's homepage. */
+  redirectedHome: boolean;
 };
 
 export const MAX_CANDIDATES_PER_PLATFORM = 3;
@@ -114,6 +122,7 @@ function emptyResult(platform: ProbePlatform, url: URL | null): ProbeResult {
     reasons: [],
     warnings: [],
     attempts: [],
+    redirectedHome: false,
   };
 }
 
@@ -170,8 +179,9 @@ export async function probeUrl(platform: ProbePlatform, url: URL, config: ProbeC
     const signals = withHop(result, outcome.hop);
     const strong = signals.filter((s) => s.strength === 'strong');
     const target = new URL(outcome.location);
+    result.redirectedHome = target.pathname === '/' || target.pathname === '';
     const where =
-      target.pathname === '/' || target.pathname === ''
+      result.redirectedHome
         ? `la page d’accueil ${target.href} : annonce expirée ou blocage discret`
         : `${target.href}, hors d’une page d’annonce : annonce probablement expirée`;
     result.finalUrl = outcome.finalUrl;
@@ -209,7 +219,13 @@ export async function probeTarget(
   for (const url of target.urls) {
     if (!hasTime()) break;
     last = await probeUrl(target.platform, url, config);
-    attempts.push({ url: url.href, status: last.status, verdict: last.verdict, durationMs: last.durationMs });
+    attempts.push({
+      url: url.href,
+      status: last.status,
+      verdict: last.verdict,
+      durationMs: last.durationMs,
+      redirectedHome: last.redirectedHome,
+    });
     if (last.verdict !== 'expirée') break;
   }
   if (!last) {
@@ -219,7 +235,11 @@ export async function probeTarget(
     );
     return result;
   }
-  if (attempts.length > 1 && last.verdict === 'expirée') {
+  if (attempts.length > 1 && attempts.every((a) => a.redirectedHome)) {
+    // Fresh listings do not all expire at once: sending every one home is a silent block.
+    last.verdict = 'bloqué';
+    last.reasons.push(`${attempts.length} annonces récentes, toutes redirigées vers l’accueil : blocage discret probable`);
+  } else if (attempts.length > 1 && last.verdict === 'expirée') {
     last.reasons.push(`${attempts.length} annonces essayées, toutes expirées ou redirigées`);
   }
   return { ...last, attempts };
