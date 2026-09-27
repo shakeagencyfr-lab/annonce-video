@@ -124,10 +124,8 @@ Proposition, à valider avant l'étape 1 :
    téléversées depuis le téléphone, où elles se trouvent déjà.
 4. **Pas de service de contournement** (proxy résidentiel, navigateur géré) sans avis juridique.
 
-Question à trancher avant de choisir entre 2 et 3 : les **serveurs d'images**
-(`img.leboncoin.fr`, `mms.seloger.com`…) acceptent-ils Vercel ? Si oui, l'extension n'envoie
-que la fiche et les URL des photos ; si non, elle doit aussi téléverser les photos. Un test
-d'une image par plateforme depuis Vercel suffit pour le savoir.
+La question des serveurs d'images est tranchée plus bas (étape 0 bis) : ils acceptent tous
+Vercel, donc l'extension n'envoie que la fiche et les adresses des photos.
 
 ## Étape 0 bis — Les serveurs d'images acceptent-ils Vercel ?
 
@@ -150,3 +148,29 @@ Pour tester une photo précise : ouvrir l'annonce dans le navigateur, clic droit
 « Copier l'adresse de l'image », puis
 `/api/probe/images?format=md&platform=leboncoin&img=<adresse copiée>` (l'encoder si elle
 contient `&`).
+
+### Résultats du 27/09/2026 (22:04 à 22:09 UTC, Vercel `cdg1`)
+
+| Plateforme | Hôte | Photo | HTTP | Format, taille | Durée | Témoin (objet absent) | Verdict |
+|---|---|---|---|---|---|---|---|
+| Leboncoin | `img.leboncoin.fr` (CloudFront) | annonce publiée le 25/09/2026 | 200 | JPEG, 88 Ko | 23 ms | 404, sans anti-robot | **accessible** |
+| AutoScout24.fr | `prod.pictures.autoscout24.net` (CloudFront) | prise dans l'annonce lue | 200 | WebP, 6 Ko (vignette 360×270) | 160 ms | 404, sans anti-robot | **accessible** |
+| SeLoger | `mms.seloger.com` (Cloudimage) | annonce créée le 25/09/2026 | 200 | WebP, 41 Ko | 13 ms | 404 (image « pas de photo »), sans anti-robot | **accessible** |
+| La Centrale | `image-annonce.lacentrale.fr` (S3 + CloudFront) | annonce de départ de l'étape 0 | 200 | JPEG, 108 Ko | 111 ms | 404, sans anti-robot | **accessible** |
+| PAP | `cdn.pap.fr` (Apache, hors Cloudflare) | annonce d'avril-mai 2026 | 200 | WebP, 7 Ko | 74 ms | 404, sans anti-robot | **accessible** |
+
+Conséquences :
+
+- **Les pages sont bloquées, pas les photos.** L'extension lit la fiche dans le navigateur du
+  vendeur et envoie les adresses des photos ; le serveur les télécharge lui-même. Pas de
+  téléversement depuis le navigateur.
+- **SeLoger** signe ses adresses (`ci_seal`, Cloudimage) : il faut les reprendre telles que la
+  page les donne. On ne peut ni les reconstruire ni en changer la taille.
+- **La Centrale** a aussi un hôte récent signé (`pictures.lacentrale.fr?…&signature=`), mais
+  l'ancien hôte sans signature sert toujours les photos.
+- **Taille des photos, à vérifier à l'étape 1** : les vidéos sont en 1080×1920 et 1920×1080.
+  Les fichiers testés sont petits (vignette AutoScout24, variante `-p2` de PAP, `ad-large` de
+  Leboncoin). Pour chaque plateforme, il faudra repérer la variante la plus grande proposée
+  par la page (AutoScout24 `1920x1080`, `classified-1200x800` chez Leboncoin, etc.).
+- Une fois l'étape 0 close, remettre `PROBE_ENABLED` à vide dans Vercel pour désactiver les
+  deux routes de test.
