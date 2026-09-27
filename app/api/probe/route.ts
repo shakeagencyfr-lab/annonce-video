@@ -66,17 +66,31 @@ export async function GET(req: NextRequest) {
         ? []
         : [`région ${region} au lieu de ${EXPECTED_REGION} : le résultat ne vaut pas pour la production à Paris`];
 
+    // Derived facts only, never page content: enough to rebuild the report from the logs.
     const results = await probeAll(targets, DEFAULT_CONFIG, BUDGET_MS, (r) => {
       console.info(
         JSON.stringify({
           probe: r.platform,
           region,
+          url: r.url,
           status: r.status,
           verdict: r.verdict,
-          attempts: r.attempts.length,
+          attempts: r.attempts.map((a) => `${a.status ?? '-'} ${a.verdict}`),
           bytes: r.bytes,
           ms: r.durationMs,
-          signals: r.signals.map((s) => s.id),
+          ttfbMs: r.ttfbMs,
+          listingData: r.listingData,
+          price: r.price.source ?? false,
+          photos: r.photoCount,
+          declaredPhotos: r.declaredPhotoCount,
+          dpe: r.dpe,
+          badTraffic: r.badTraffic,
+          genericTitle: r.genericTitle,
+          server: r.headers['server'] ?? null,
+          cookies: r.cookieNames,
+          signals: r.signals.map((s) => `${s.strength === 'strong' ? '!' : ''}${s.id}`),
+          reasons: r.reasons,
+          warnings: r.warnings,
         }),
       );
     });
