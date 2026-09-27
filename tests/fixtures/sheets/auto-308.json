@@ -1,0 +1,29 @@
+{
+  "vertical": "auto",
+  "platform": "leboncoin",
+  "sourceUrl": "https://www.leboncoin.fr/ad/voitures/3209507340",
+  "title": "Peugeot 308 1.2 PureTech 130ch S&S BVM6 Allure",
+  "make": "Peugeot",
+  "model": "308",
+  "version": "1.2 PureTech 130ch S&S BVM6 Allure",
+  "year": 2019,
+  "mileageKm": 68000,
+  "fuel": "Essence",
+  "gearbox": "Manuelle",
+  "powerHp": 130,
+  "price": 15990,
+  "currency": "EUR",
+  "city": "Lyon",
+  "postalCode": "69003",
+  "sellerType": "pro",
+  "sellerName": "Garage des Tests",
+  "sellerSiren": "123456789",
+  "warranty": "Garantie 12 mois",
+  "equipment": ["Caméra de recul", "Apple CarPlay", "Régulateur adaptatif", "Jantes alliage 17 pouces", "Climatisation automatique bizone"],
+  "description": "Première main, carnet d'entretien à jour, contrôle technique OK. Véhicule non fumeur.",
+  "photos": [
+    { "url": "https://img.leboncoin.fr/api/v1/lbcpb1/images/aa/bb/cc/aabbcc0011223344556677889900aabbccddeeff.jpg?rule=ad-large" },
+    { "url": "https://img.leboncoin.fr/api/v1/lbcpb1/images/11/22/33/1122330011223344556677889900aabbccddeeff.jpg?rule=ad-large" },
+    { "url": "https://img.leboncoin.fr/api/v1/lbcpb1/images/44/55/66/4455660011223344556677889900aabbccddeeff.jpg?rule=ad-large" }
+  ]
+}
