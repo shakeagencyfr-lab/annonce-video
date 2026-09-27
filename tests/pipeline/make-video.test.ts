@@ -124,6 +124,33 @@ describe('makeVideo (online path, with fakes)', () => {
     ).rejects.toThrow(/ELEVENLABS_VOICE_ID_FR/);
   });
 
+  it('logs a missing DPE on a property listing and shows none (rule 5)', async () => {
+    const f = fakes();
+    const immo = join(dir, 'immo.json');
+    await writeFile(
+      immo,
+      JSON.stringify({
+        vertical: 'immo',
+        platform: 'seloger',
+        sourceUrl: 'https://www.seloger.com/annonce/achat/a/b/c/26ZCAGW19827',
+        transaction: 'vente',
+        propertyType: 'Appartement',
+        currency: 'EUR',
+        city: 'Marseille',
+        features: [],
+        photos: [],
+      }),
+    );
+    const logs: string[] = [];
+    const result = await makeVideo(
+      { source: immo, language: 'fr', outRoot: join(dir, 'out'), offline: true, photosDir, preview: false, variants: ['listing'], log: (l) => logs.push(l) },
+      f.deps,
+    );
+    expect(result.warnings.some((w) => w.includes('DPE absente'))).toBe(true);
+    expect(logs.join('\n')).toContain('DPE absente');
+    expect(f.renders[0]?.jobs[0]?.props.dpe).toBeUndefined();
+  });
+
   it('runs offline without any Claude or TTS call', async () => {
     const f = fakes();
     const result = await makeVideo(

@@ -113,6 +113,11 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
   log('1/6 Lecture de l’annonce');
   const { sheet, origin } = await readSource(options.source);
   log(`    ${sheet.vertical === 'auto' ? sheet.title : sheet.propertyType} (${sheet.platform}, ${origin}), ${sheet.photos.length} photo(s) dans la fiche`);
+  if (sheet.vertical === 'immo' && !sheet.dpe) {
+    // Rule 5: no DPE in the listing -> nothing shown in the video, and logged.
+    warnings.push('classe DPE absente de l’annonce : rien n’est affiché dans la vidéo');
+    log('    ⚠ classe DPE absente de l’annonce : rien n’est affiché');
+  }
 
   const workDir = resolve(options.outRoot, `${slug(sheet)}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   const publicDir = join(workDir, 'public');
