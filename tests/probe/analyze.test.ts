@@ -73,6 +73,16 @@ describe('analyze: readable listings', () => {
     expect(a.warnings).toContain('DataDome actif sur le site, page servie');
   });
 
+  it('counts Leboncoin photos whose id is not strictly hex, and ignores store logos', () => {
+    const body = fixture('leboncoin-auto-ok.html').replace(
+      '44/55/66/4455660011223344556677889900aabbccddeeff.jpg',
+      'gh/fd/30/ghfd30035d83088e552fd60a4cb1293fc5138ee4.jpg',
+    );
+    expect(body).toContain('ghfd30035d');
+    const a = run('leboncoin-auto', raw(body));
+    expect(a.photoCount).toBe(3);
+  });
+
   it('reads Leboncoin immo and its DPE letter', () => {
     const a = run('leboncoin-immo', raw(fixture('leboncoin-immo-ok.html')));
     expect(a.verdict).toBe('lisible');

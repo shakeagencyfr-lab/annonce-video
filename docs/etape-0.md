@@ -164,13 +164,25 @@ Conséquences :
 - **Les pages sont bloquées, pas les photos.** L'extension lit la fiche dans le navigateur du
   vendeur et envoie les adresses des photos ; le serveur les télécharge lui-même. Pas de
   téléversement depuis le navigateur.
-- **SeLoger** signe ses adresses (`ci_seal`, Cloudimage) : il faut les reprendre telles que la
-  page les donne. On ne peut ni les reconstruire ni en changer la taille.
+- **SeLoger** signe ses adresses (`ci_seal`, Cloudimage) : il faut reprendre le chemin et la
+  signature tels que la page les donne, on ne peut pas les reconstruire. La signature ne
+  couvrirait que le chemin : des exemples réels y ajoutent `&w=…&h=…` sans la refaire. À
+  vérifier avant de s'en servir pour demander une taille plus grande.
 - **La Centrale** a aussi un hôte récent signé (`pictures.lacentrale.fr?…&signature=`), mais
   l'ancien hôte sans signature sert toujours les photos.
-- **Taille des photos, à vérifier à l'étape 1** : les vidéos sont en 1080×1920 et 1920×1080.
-  Les fichiers testés sont petits (vignette AutoScout24, variante `-p2` de PAP, `ad-large` de
-  Leboncoin). Pour chaque plateforme, il faudra repérer la variante la plus grande proposée
-  par la page (AutoScout24 `1920x1080`, `classified-1200x800` chez Leboncoin, etc.).
+- **Taille des photos, à vérifier à l'étape 1** : les vidéos sont en 1080×1920 et 1920×1080,
+  et les fichiers testés sont petits. Ce que la recherche indique, plateforme par plateforme :
+  - Leboncoin : pas de signature, taille choisie par `?rule=` (`ad-image` ~345×460,
+    `ad-large` ~600×800, `classified-1200x800-webp`). Le format suit l'en-tête `Accept`
+    (WebP possible malgré l'extension `.jpg`). Les photos risquent d'être petites pour de la
+    vidéo HD : c'est à mesurer.
+  - AutoScout24 : pas de signature, toute taille prévue par le suffixe
+    (`…jpg/1920x1080.webp`).
+  - La Centrale : l'ancien hôte sans signature sert `1096x829`, sans filigrane (les vignettes
+    `352x264` du nouvel hôte portent `watermark=lc`).
+  - PAP : pas de signature ; `-p1`, `-p2`, `-p3` semblent être des tailles, la plus grande
+    reste à trouver.
+  - Les identifiants de photos Leboncoin ne sont pas toujours hexadécimaux (préfixe `gh`) :
+    ne pas les valider trop strictement.
 - Une fois l'étape 0 close, remettre `PROBE_ENABLED` à vide dans Vercel pour désactiver les
   deux routes de test.

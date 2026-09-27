@@ -72,7 +72,9 @@ const LEBONCOIN = {
   listingData: /"ad"\s*:\s*\{[^{}]{0,300}?"list_id"\s*:\s*\d+|"page"\s*:\s*"(?:\/ad\/\[[a-z]+\]\/\[id\]|\/ClassifiedAd)"/,
   listingKey: lastPathNumber,
   pageId: /"list_id"\s*:\s*(\d+)/,
-  photo: /img\.leboncoin\.fr\/api\/v1\/lbcpb1\/images\/([0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{2}\/[0-9a-f]{40})\.jpg/gi,
+  // Ids are mostly hex, but some start with "gh" (seen in 2026): not strictly hex.
+  // The 40-character id with .jpg excludes store logos (UUID ids, no extension).
+  photo: /img\.leboncoin\.fr\/api\/v1\/lbcpb1\/images\/([0-9a-z]{2}\/[0-9a-z]{2}\/[0-9a-z]{2}\/[0-9a-z]{40})\.jpg/gi,
   photoKey: (m: RegExpMatchArray) => m[1] ?? null,
   declaredPhotos: /"nb_images"\s*:\s*(\d+)/,
   price: [
