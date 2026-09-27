@@ -1,0 +1,67 @@
+{
+  "social": {
+    "segments": [
+      { "kind": "hook", "facts": ["make", "model", "version", "year"], "text": "Peugeot 308 Allure de 2019." },
+      {
+        "kind": "point",
+        "facts": ["mileageKm", "fuel", "version", "powerHp", "gearbox"],
+        "text": "Elle affiche 68 000 kilomètres, avec un moteur essence 1.2 PureTech de 130 chevaux et une boîte manuelle à 6 vitesses."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[0]", "equipment[1]", "equipment[2]"],
+        "text": "À bord, vous profitez de la caméra de recul, d’Apple CarPlay et du régulateur adaptatif."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[3]", "equipment[4]"],
+        "text": "Elle a aussi des jantes alliage 17 pouces et la climatisation automatique bizone."
+      },
+      {
+        "kind": "point",
+        "facts": ["description"],
+        "text": "Première main, carnet d’entretien à jour et contrôle technique OK, véhicule non fumeur."
+      },
+      { "kind": "point", "facts": ["warranty"], "text": "Elle est vendue avec une garantie de 12 mois." },
+      { "kind": "point", "facts": ["price"], "text": "Son prix : 15 990 euros." },
+      { "kind": "cta", "facts": ["sellerName", "city"], "text": "Contactez Garage des Tests, à Lyon." }
+    ],
+    "overlays": {
+      "title": "Peugeot 308",
+      "subtitle": "2019 · 68 000 km · Essence",
+      "price": "15 990 €",
+      "contact": "Garage des Tests · Lyon"
+    }
+  },
+  "listing": {
+    "segments": [
+      { "kind": "hook", "facts": ["make", "model", "version", "year"], "text": "Peugeot 308 Allure de 2019." },
+      {
+        "kind": "point",
+        "facts": ["mileageKm", "fuel", "version", "powerHp", "gearbox"],
+        "text": "Elle affiche 68 000 kilomètres, avec un moteur essence 1.2 PureTech de 130 chevaux et une boîte manuelle à 6 vitesses."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[0]", "equipment[1]", "equipment[2]"],
+        "text": "À bord, vous profitez de la caméra de recul, d’Apple CarPlay et du régulateur adaptatif."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[3]", "equipment[4]"],
+        "text": "Elle a aussi des jantes alliage 17 pouces et la climatisation automatique bizone."
+      },
+      {
+        "kind": "point",
+        "facts": ["description"],
+        "text": "Première main, carnet d’entretien à jour et contrôle technique OK, véhicule non fumeur."
+      },
+      { "kind": "point", "facts": ["warranty"], "text": "Elle est vendue avec une garantie de 12 mois." },
+      { "kind": "cta", "facts": [], "text": "Tous les détails sont dans l’annonce." }
+    ],
+    "overlays": {
+      "title": "Peugeot 308",
+      "subtitle": "2019 · 68 000 km · Essence"
+    }
+  }
+}
