@@ -23,7 +23,12 @@ export const IMAGE_GROUPS: readonly ImageGroup[] = [
     id: 'leboncoin',
     label: 'Leboncoin',
     hosts: ['img.leboncoin.fr'],
-    seedImages: [],
+    // Public fixtures of listings published 2026-09-25 and 2026-08-26 (no signature on this host).
+    seedImages: [
+      'https://img.leboncoin.fr/api/v1/lbcpb1/images/d4/fc/28/d4fc283c7c587e60076c735422df513c5492dd73.jpg?rule=ad-large',
+      'https://img.leboncoin.fr/api/v1/lbcpb1/images/14/98/50/14985046a39d69ae8688d3b6a485d65fa3b051da.jpg?rule=ad-large',
+      'https://img.leboncoin.fr/api/v1/lbcpb1/images/d4/64/ab/d464ab5481809e22aa77582a0a8ce10775aee4d1.jpg?rule=ad-large',
+    ],
     missingImage:
       'https://img.leboncoin.fr/api/v1/lbcpb1/images/00/00/00/0000000000000000000000000000000000000000.jpg?rule=ad-large',
   },
@@ -44,7 +49,13 @@ export const IMAGE_GROUPS: readonly ImageGroup[] = [
     id: 'seloger',
     label: 'SeLoger',
     hosts: ['mms.seloger.com'],
-    seedImages: [],
+    // Public fixtures of listings created 2026-09-25. ci_seal is a Cloudimage signature:
+    // the URL must be used as served, it cannot be rebuilt or resized.
+    seedImages: [
+      'https://mms.seloger.com/a/b/a/6/aba690f4-93db-44bb-8d4c-0fc0c5f3ca79.jpg?ci_seal=2a18f5c437177ab206bbe1254cb8d02279094778',
+      'https://mms.seloger.com/a/7/b/5/a7b5d58f-48c4-470e-b312-c7873a76629e.jpg?ci_seal=5917bc1ace3f390256dac4dcb1b917b3182a79e9',
+      'https://mms.seloger.com/3/7/d/6/37d6cc74-693f-49c7-a5a0-047d5c5d1b62.jpg?ci_seal=c70471a8884861d6490501eabd163401b2590942',
+    ],
     missingImage: 'https://mms.seloger.com/0/0/0/0/00000000-0000-0000-0000-000000000000.jpg',
   },
   {
