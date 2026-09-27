@@ -70,7 +70,12 @@ export const IMAGE_GROUPS: readonly ImageGroup[] = [
     id: 'pap',
     label: 'PAP',
     hosts: ['cdn.pap.fr'],
-    seedImages: [],
+    // Public fixtures from April-May 2026; no signature on this host.
+    seedImages: [
+      'https://cdn.pap.fr/photos/pap/af/2c/af2c19c7b92e0f3d327d0504129ff9e4/a-p2.webp',
+      'https://cdn.pap.fr/photos/pap/ac/9c/ac9c2650a2c893fb5480e3b425511929/a-p2.webp',
+      'https://cdn.pap.fr/photos/pap/f6/ee/f6eeee0144a2793f4bc4255507d3a25e/f-p2.webp',
+    ],
     missingImage: 'https://cdn.pap.fr/photos/pap/00/00/00000000000000000000000000000000/0-p2.webp',
   },
 ];
