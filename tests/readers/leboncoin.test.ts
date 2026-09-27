@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ReadError } from '@/lib/readers/errors';
-import { canHandle, fromExport, isExport, read } from '@/lib/readers/leboncoin';
+import { canHandle, descriptionBullets, fromExport, isExport, read } from '@/lib/readers/leboncoin';
 
 type Json = Record<string, any>;
 
@@ -223,5 +223,51 @@ describe('fromExport: refused files', () => {
     const err = thrown(() => fromExport(exported));
     expect(err.reason).toBe(reason);
     expect(err.message).toMatch(/^Leboncoin : /);
+  });
+});
+
+describe('pro ads shaped like real 2026 exports', () => {
+  it('names the shop buyers see, not the account behind it', () => {
+    const exported = load('leboncoin-auto-export.json');
+    exported.ad.owner = { ...exported.ad.owner, type: 'pro', name: 'RS AUTOMOBILES' };
+    setAttribute(exported.ad, 'store_name', { value: 'VOGUE AUTOMOBILES', values: ['VOGUE AUTOMOBILES'], value_label: 'VOGUE AUTOMOBILES' });
+    const sheet = fromExport(exported);
+    expect(sheet.vertical === 'auto' && sheet.sellerName).toBe('VOGUE AUTOMOBILES');
+  });
+
+  it('takes the equipment from the bullet list of the description when no attribute lists it', () => {
+    const exported = load('leboncoin-auto-export.json');
+    setAttribute(exported.ad, 'vehicle_specifications', null);
+    exported.ad.body = [
+      'Audi Q2, première main, garantie 12 mois.',
+      '',
+      'OPTIONS ET EQUIPEMENTS :',
+      'Conduite',
+      '- Régulateur de vitesse',
+      '- Radar de stationnement AR',
+      '• Sièges avant chauffants',
+      '- régulateur de vitesse',
+      '-pas une puce',
+      'Kilométrage garanti.',
+    ].join('\n');
+    const sheet = fromExport(exported);
+    expect(sheet.vertical === 'auto' && sheet.equipment).toEqual([
+      'Régulateur de vitesse',
+      'Radar de stationnement AR',
+      'Sièges avant chauffants',
+    ]);
+  });
+
+  it('keeps listed equipment attributes first', () => {
+    const exported = load('leboncoin-auto-export.json');
+    exported.ad.body = '- Toit ouvrant';
+    const sheet = fromExport(exported);
+    expect(sheet.vertical === 'auto' && sheet.equipment).not.toContain('Toit ouvrant');
+  });
+
+  it('caps and cleans bullet items', () => {
+    expect(descriptionBullets(undefined)).toEqual([]);
+    expect(descriptionBullets(`- ${'x'.repeat(81)}\n-  Deux   espaces \n- a`)).toEqual(['Deux espaces']);
+    expect(descriptionBullets(Array.from({ length: 200 }, (_, i) => `- item ${i}`).join('\n'))).toHaveLength(150);
   });
 });

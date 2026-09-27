@@ -221,6 +221,35 @@ function owner(ad: Json): { pro: boolean; name?: string; siren?: string } {
   return { pro: type === 'pro', name: text(o?.name), siren: siren && /^\d{9}$/.test(siren) ? siren : undefined };
 }
 
+/**
+ * The name buyers see: a pro's shop name ("store_name", which also signs the ad), else
+ * the account name (often the legal entity, e.g. "RS AUTOMOBILES" for "VOGUE AUTOMOBILES").
+ */
+function displayedSeller(attrs: Map<string, Attribute>, accountName: string | undefined): string | undefined {
+  const store = attrs.get('store_name');
+  return store?.label ?? store?.value ?? accountName;
+}
+
+const BULLET = /^\s*[-•*–]\s+(.+?)\s*$/;
+
+/**
+ * Items the seller listed as bullet points in the description ("- Radar de stationnement
+ * AR"), copied as written: many pro ads put their equipment there instead of in
+ * vehicle_specifications. Nothing is inferred from free text (rule 3).
+ */
+export function descriptionBullets(body: string | undefined, max = 150): string[] {
+  if (!body) return [];
+  const items = new Map<string, string>();
+  for (const line of body.split(/\r?\n/)) {
+    const item = BULLET.exec(line)?.[1]?.replace(/\s+/g, ' ');
+    if (!item || item.length < 2 || item.length > 80) continue;
+    const key = item.toLowerCase();
+    if (!items.has(key)) items.set(key, item);
+    if (items.size >= max) break;
+  }
+  return [...items.values()];
+}
+
 function validate(candidate: object): Sheet {
   try {
     return parseSheet(candidate);
@@ -244,6 +273,11 @@ function year(attrs: Map<string, Attribute>): number | undefined {
   const fromIssuance = wholeNumber(/(\d{4})$/.exec(attrs.get('issuance_date')?.value ?? '')?.[1]);
   const y = fromRegdate ?? fromIssuance;
   return y !== undefined && y >= 1900 && y <= 2100 ? y : undefined;
+}
+
+function equipmentOf(attrs: Map<string, Attribute>, body: string | undefined): string[] {
+  const listed = [...new Set(attrs.get('vehicle_specifications')?.labels ?? [])];
+  return listed.length > 0 ? listed : descriptionBullets(body);
 }
 
 function mapVehicle(ad: Json, sourceUrl: string): VehicleSheet {
@@ -275,10 +309,10 @@ function mapVehicle(ad: Json, sourceUrl: string): VehicleSheet {
       // No phone: it is not in the ad JSON (shown on demand), so it stays absent.
       ...place(ad),
       sellerType: seller.pro ? 'pro' : 'particulier',
-      sellerName: seller.name,
+      sellerName: seller.pro ? displayedSeller(attrs, seller.name) : seller.name,
       sellerSiren: seller.siren,
       warranty: labelOf('ad_warranty_type'),
-      equipment: [...new Set(attrs.get('vehicle_specifications')?.labels ?? [])],
+      equipment: equipmentOf(attrs, text(ad.body)),
       description: text(ad.body),
       photos: adPhotos(ad),
     } satisfies Partial<VehicleSheet>),
@@ -314,10 +348,10 @@ function mapProperty(ad: Json, sourceUrl: string, transaction: PropertySheet['tr
       ...place(ad),
       dpe: energyClass(attrs.get('energy_rate')),
       ges: energyClass(attrs.get('ges')),
-      // Feature attributes are not documented in the fixtures: none guessed.
-      features: [],
+      // No documented feature attribute: the seller's own bullet list, if any, as written.
+      features: descriptionBullets(text(ad.body)),
       description: text(ad.body),
-      agencyName: seller.pro ? seller.name : undefined,
+      agencyName: seller.pro ? displayedSeller(attrs, seller.name) : undefined,
       photos: adPhotos(ad),
     } satisfies Partial<PropertySheet>),
   );
