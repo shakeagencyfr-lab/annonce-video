@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { buildCues, SUBTITLE_MAX_CHARS, SUBTITLE_MAX_SEC } from '@/lib/pipeline/subtitles';
+import { buildCues, SUBTITLE_MAX_EM, SUBTITLE_MAX_SEC, textWidthEm } from '@/lib/pipeline/subtitles';
 import { templateScripts } from '@/lib/pipeline/template-script';
 import type { Format, SubtitleCue, VideoScript, WordTiming } from '@/lib/pipeline/types';
 import { estimateVoiceover } from '@/lib/pipeline/voice';
@@ -26,12 +26,55 @@ function expectWellTimed(cues: SubtitleCue[]) {
   });
 }
 
+describe('textWidthEm', () => {
+  it('counts capitals and digits wider than lower case, and narrow glyphs narrower', () => {
+    expect(textWidthEm('AUTOMOBILES')).toBeGreaterThan(textWidthEm('automobiles') * 1.15);
+    expect(textWidthEm('2023')).toBeGreaterThan(textWidthEm('abcd'));
+    expect(textWidthEm('ill')).toBeLessThan(textWidthEm('ann') * 0.6);
+    expect(textWidthEm('')).toBe(0);
+  });
+
+  it('gives accented letters the width of their base letter', () => {
+    expect(textWidthEm('Équipée')).toBe(textWidthEm('Equipee'));
+    expect(textWidthEm('Ç')).toBe(textWidthEm('C'));
+  });
+
+  it('counts every kind of space the same', () => {
+    expect(textWidthEm('68\u202F000')).toBe(textWidthEm('68 000'));
+    expect(textWidthEm('68\u00A0000')).toBe(textWidthEm('68 000'));
+  });
+
+  it('is within a few percent of Inter ExtraBold', () => {
+    // Sums of the advance widths of the font (@fontsource/inter, 800, latin), without kerning.
+    const measured: [string, number][] = [
+      ['Appelez MARTIN AUTOMOBILES.', 16.45],
+      ['Équipée : Caméra de recul,', 13.23],
+      ['68\u00A0000 kilomètres au compteur', 15.6],
+      ['Tous les détails sont dans l’annonce.', 18.32],
+    ];
+    for (const [text, em] of measured) expect(Math.abs(textWidthEm(text) - em) / em).toBeLessThan(0.03);
+  });
+});
+
 describe('buildCues', () => {
   it.each<Format>(['9x16', '16x9'])('keeps every line within the width of %s', (format) => {
     const cues = buildCues(timed(LONG), format);
-    for (const cue of cues) expect(cue.text.length).toBeLessThanOrEqual(SUBTITLE_MAX_CHARS[format]);
+    for (const cue of cues) expect(textWidthEm(cue.text)).toBeLessThanOrEqual(SUBTITLE_MAX_EM[format]);
     // Nothing lost, nothing added.
     expect(cues.map((c) => c.text).join(' ')).toBe(LONG);
+  });
+
+  it('cuts a line in capitals that the same length in lower case keeps whole (9:16)', () => {
+    // 24 characters each: 12.8 em in lower case, 14.3 em with the shop name in capitals.
+    const lower = 'Contactez Garage Martin.';
+    const caps = 'Contactez GARAGE MARTIN.';
+    expect(buildCues(timed(lower), '9x16').map((c) => c.text)).toEqual([lower]);
+    expect(buildCues(timed(caps), '9x16').map((c) => c.text)).toEqual(['Contactez GARAGE', 'MARTIN.']);
+    // 27 characters, within the former 28-character limit, but 16.5 em: two lines on screen.
+    const cues = buildCues(timed('Appelez MARTIN AUTOMOBILES.'), '9x16');
+    expect(cues.map((c) => c.text)).toEqual(['Appelez MARTIN', 'AUTOMOBILES.']);
+    for (const cue of cues) expect(textWidthEm(cue.text)).toBeLessThanOrEqual(SUBTITLE_MAX_EM['9x16']);
+    expect(buildCues(timed('Appelez MARTIN AUTOMOBILES.'), '16x9')).toHaveLength(1);
   });
 
   it('uses wider lines in 16:9 than in 9:16', () => {
@@ -109,7 +152,7 @@ describe('buildCues', () => {
   });
 
   it('accepts other limits', () => {
-    const cues = buildCues(timed('Peugeot 308 de 2019 diesel'), '16x9', { maxChars: 12 });
+    const cues = buildCues(timed('Peugeot 308 de 2019 diesel'), '16x9', { maxEm: 7 });
     expect(cues.map((c) => c.text)).toEqual(['Peugeot 308', 'de 2019', 'diesel']);
   });
 
@@ -127,7 +170,7 @@ describe('buildCues', () => {
       expect(cues.at(-1)?.end).toBeLessThanOrEqual(voiceover.durationSec);
       for (const cue of cues) {
         expect(cue.text).toBe(cue.text.trim());
-        expect(cue.text.length).toBeLessThanOrEqual(SUBTITLE_MAX_CHARS[format]);
+        expect(textWidthEm(cue.text)).toBeLessThanOrEqual(SUBTITLE_MAX_EM[format]);
         expect(cue.end - cue.start).toBeLessThanOrEqual(SUBTITLE_MAX_SEC + 1e-9);
       }
     }

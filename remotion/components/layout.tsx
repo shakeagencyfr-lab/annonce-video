@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { cancelRender, continueRender, delayRender, useVideoConfig } from 'remotion';
+import { textWidthEm } from '../../lib/pipeline/subtitles';
 
 /** Shared look of the listing videos: font, colors, safe areas per orientation. */
 
@@ -20,6 +21,12 @@ export type Layout = {
   height: number;
   /** Side margin kept free of text. */
   sideMargin: number;
+  /**
+   * Right edge of the text blocks (title, subtitles, end card), from the right. In
+   * 9:16 it keeps text clear of the action column of TikTok, Reels and Shorts (like,
+   * comment, share); in 16:9 it is the side margin.
+   */
+  textRight: number;
   /** Top of the corner badges, below the app bars of TikTok, Reels and Shorts in 9:16. */
   badgeTop: number;
   /**
@@ -36,8 +43,10 @@ export type Layout = {
 };
 
 /**
- * 9:16 keeps text between the app bars (top ~10 %, bottom ~20 %): subtitles around
- * 72 % of the height, where networks do not overlay their buttons. 16:9 puts the
+ * 9:16 keeps text between the app bars (top ~10 %, bottom ~20 %) and left of the
+ * action column (right ~13 %, from mid-height down). A landscape photo spans the
+ * width around the middle (y 555 to 1365 for 4:3, Photos.tsx); the subtitles sit just
+ * below it, above the bottom bar, and the end card block above them. 16:9 puts the
  * subtitles near the bottom, as on YouTube.
  */
 export function useLayout(): Layout {
@@ -50,19 +59,22 @@ export function useLayout(): Layout {
       width,
       height,
       sideMargin: Math.round(width * 0.06),
+      textRight: Math.round(width * 0.13),
       badgeTop,
       // Below the badge row (DPE and price badges are under 100 px high).
       title: { top: badgeTop + Math.round(height * 0.065) },
-      subtitleCenter: Math.round(height * 0.72),
+      subtitleCenter: Math.round(height * 0.745),
       endCardCenter: Math.round(height * 0.42),
       fontSize: { title: 78, subtitle: 42, subtitles: 56, price: 88, contact: 44 },
     };
   }
+  const sideMargin = Math.round(width * 0.05);
   return {
     vertical,
     width,
     height,
-    sideMargin: Math.round(width * 0.05),
+    sideMargin,
+    textRight: sideMargin,
     badgeTop: Math.round(height * 0.06),
     title: { bottom: height - Math.round(height * 0.7) },
     subtitleCenter: Math.round(height * 0.88),
@@ -105,4 +117,32 @@ export function fitFontSize(text: string, base: number, comfortableChars: number
   return Math.round(base * Math.max(0.6, Math.sqrt(comfortableChars / text.length)));
 }
 
+/**
+ * Font size at which a one-line text, with `paddingEm` on each side, fits in
+ * `boxWidth`: `base`, or less when its estimated width (textWidthEm) is larger.
+ */
+export function fitLineFontSize(text: string, base: number, boxWidth: number, paddingEm: number): number {
+  const widthEm = textWidthEm(text) + 2 * paddingEm;
+  return Math.min(base, Math.floor(boxWidth / widthEm));
+}
+
 export const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
+
+/**
+ * A line of parts joined by « · » (« GARAGE MARTIN · Saint-Ouen-sur-Seine »,
+ * « 2019 · 68 000 km · Essence ») that wraps between the parts rather than inside one,
+ * e.g. at a hyphen of a town name; the « · » stays at the end of the first line.
+ */
+export function SeparatedText({ text }: { text: string }) {
+  const parts = text.split(' · ');
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 ? ' ' : null}
+          <span style={{ display: 'inline-block' }}>{i < parts.length - 1 ? `${part}\u00A0·` : part}</span>
+        </Fragment>
+      ))}
+    </>
+  );
+}

@@ -1,5 +1,5 @@
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
-import { COLORS, clamp, fitFontSize, useLayout } from './layout';
+import { COLORS, SeparatedText, clamp, fitFontSize, useLayout } from './layout';
 
 /**
  * Closing card over the last photo. The social variant adds the price and the
@@ -32,7 +32,7 @@ export function EndCard({
         style={{
           position: 'absolute',
           left: layout.sideMargin,
-          right: layout.sideMargin,
+          right: layout.textRight,
           top: layout.endCardCenter,
           transform: 'translateY(-50%)',
           display: 'flex',
@@ -65,7 +65,7 @@ export function EndCard({
               color: COLORS.muted,
             }}
           >
-            {subtitle}
+            <SeparatedText text={subtitle} />
           </div>
         ) : null}
         {price ? (
@@ -79,7 +79,6 @@ export function EndCard({
               color: COLORS.ink,
               fontSize: layout.fontSize.price,
               fontWeight: 800,
-              letterSpacing: '-0.02em',
               whiteSpace: 'nowrap',
             }}
           >
@@ -95,7 +94,7 @@ export function EndCard({
               lineHeight: 1.25,
             }}
           >
-            {contact}
+            <SeparatedText text={contact} />
           </div>
         ) : null}
       </div>

@@ -20,7 +20,6 @@ export function PriceBadge({ price, durationInFrames }: { price: string; duratio
         color: COLORS.ink,
         fontSize: Math.round(layout.fontSize.price * 0.62),
         fontWeight: 800,
-        letterSpacing: '-0.01em',
         boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
         transform: `scale(${0.6 + 0.4 * pop})`,
         transformOrigin: 'left center',

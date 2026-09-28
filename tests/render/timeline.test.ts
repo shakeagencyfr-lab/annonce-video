@@ -3,21 +3,28 @@ import type { VideoProps } from '@/lib/render/props';
 import {
   CROSSFADE_SEC,
   END_CARD_SEC,
+  KEN_BURNS_PEAK,
+  MAX_UPSCALE,
   MIN_PHOTO_SEC,
+  MIN_ZOOM_PEAK,
   MUSIC_VOLUME,
   TITLE_CARD_SEC,
   containedBox,
   cueAtFrame,
+  displayText,
   endCardFrom,
   fadeInOpacity,
   kenBurns,
   kenBurnsScale,
   musicVolume,
+  photoBaseScale,
   photoFit,
   photoSchedule,
+  photoTrackSchedule,
   screenTexts,
   secToFrames,
   type Slot,
+  zoomPeak,
 } from '@/lib/render/timeline';
 
 const FPS = 30;
@@ -106,6 +113,51 @@ describe('photoSchedule', () => {
   });
 });
 
+describe('photoTrackSchedule', () => {
+  const FADE = secToFrames(CROSSFADE_SEC, FPS);
+  // The two voiced runs of the audit (530 and 718 frames): photos 9 and 10 used to start
+  // under the end card. 530 frames leave room for 9 photos of MIN_PHOTO_SEC before it.
+  const cases: [count: number, durationInFrames: number, shown: number][] = [
+    [10, 530, 9],
+    [10, 718, 10],
+    [8, 35 * FPS, 8],
+    [14, 55 * FPS, 14],
+  ];
+
+  it.each(cases)('shows each of %i photos before the end card of a %i-frame video', (count, duration, shown) => {
+    const endFrom = endCardFrom(duration, FPS);
+    const slots = photoTrackSchedule(count, duration, FPS);
+    expect(slots).toHaveLength(shown);
+    for (const [i, slot] of slots.entries()) {
+      // Fully faded in, and alone on screen, before the veil of the end card starts.
+      const clearFrom = slot.from + (i === 0 ? 0 : FADE);
+      const clearUntil = Math.min(slots[i + 1]?.from ?? endFrom, endFrom);
+      expect(clearUntil - clearFrom).toBeGreaterThanOrEqual(MIN_FRAMES - 2 * OVERLAP);
+    }
+  });
+
+  it.each(cases)('holds the last photo under the end card until the end (%i photos, %i frames)', (count, duration) => {
+    const slots = photoTrackSchedule(count, duration, FPS);
+    const last = slots.at(-1)!;
+    expect(last.from).toBeLessThan(endCardFrom(duration, FPS));
+    expect(last.from + last.durationInFrames).toBe(duration);
+    const counts = visibleCounts(slots, duration);
+    expect(counts.every((c) => c === 1 || c === 2)).toBe(true);
+  });
+
+  it('keeps the schedule of the photos before the last one', () => {
+    const duration = 718;
+    const until = endCardFrom(duration, FPS) + FADE;
+    expect(photoTrackSchedule(10, duration, FPS).slice(0, -1)).toEqual(photoSchedule(10, until, FPS).slice(0, -1));
+  });
+
+  it('shows fewer photos when the time before the end card is short, and nothing without photos', () => {
+    expect(photoTrackSchedule(10, 12 * FPS, FPS).length).toBeLessThan(10);
+    expect(photoTrackSchedule(1, 20, FPS)).toEqual([{ from: 0, durationInFrames: 20 }]);
+    expect(photoTrackSchedule(0, 900, FPS)).toEqual([]);
+  });
+});
+
 describe('fadeInOpacity', () => {
   it('goes from 0 to 1 over the fade, then stays at 1', () => {
     expect(fadeInOpacity(0, 15)).toBe(0);
@@ -149,6 +201,18 @@ describe('kenBurns', () => {
   it('accepts any integer seed', () => {
     expect(kenBurns(-1)).toEqual(kenBurns(3));
     expect(kenBurns(4)).toEqual(kenBurns(0));
+  });
+
+  it('zooms up to a lower peak when asked, with the same focus points and drift', () => {
+    for (let i = 0; i < 4; i++) {
+      const full = kenBurns(i);
+      const soft = kenBurns(i, 1.04);
+      expect([soft.fromScale, soft.toScale].sort()).toEqual([1, 1.04]);
+      expect(soft.originX).toBe(full.originX);
+      expect(soft.originY).toBe(full.originY);
+      expect(Math.sign(soft.toScale - soft.fromScale)).toBe(Math.sign(full.toScale - full.fromScale));
+    }
+    expect(kenBurns(0, KEN_BURNS_PEAK)).toEqual(kenBurns(0));
   });
 
   it('interpolates the scale over the slot and clamps the progress', () => {
@@ -223,34 +287,22 @@ describe('containedBox', () => {
   const photos = [
     { width: 1600, height: 1066 },
     { width: 1024, height: 768 },
+    { width: 800, height: 600 },
     { width: 1066, height: 1600 },
     { width: 1000, height: 1000 },
     { width: 4000, height: 1000 },
   ];
-  const EPS = 1e-6;
 
-  it('keeps the whole photo inside the frame at the top of every zoom', () => {
+  it('fits the whole photo in the frame, touching two opposite edges', () => {
     for (const frame of frames) {
       for (const photo of photos) {
-        for (let i = 0; i < 4; i++) {
-          const move = kenBurns(i);
-          const box = containedBox(photo, frame, move);
-          const grow = Math.max(move.fromScale, move.toScale) - 1;
-          const ox = move.originX / 100;
-          const oy = move.originY / 100;
-          // Edges of the box once scaled around its origin.
-          const left = box.left - ox * grow * box.width;
-          const right = box.left + box.width + (1 - ox) * grow * box.width;
-          const top = box.top - oy * grow * box.height;
-          const bottom = box.top + box.height + (1 - oy) * grow * box.height;
-          expect(left).toBeGreaterThanOrEqual(-EPS);
-          expect(right).toBeLessThanOrEqual(frame.width + EPS);
-          expect(top).toBeGreaterThanOrEqual(-EPS);
-          expect(bottom).toBeLessThanOrEqual(frame.height + EPS);
-          // As large as allowed: one edge touches the frame at the top of the zoom.
-          const touches = [left, top, frame.width - right, frame.height - bottom].some((gap) => Math.abs(gap) < 1e-3);
-          expect(touches).toBe(true);
-        }
+        const box = containedBox(photo, frame);
+        expect(box.left).toBeGreaterThanOrEqual(-1e-6);
+        expect(box.top).toBeGreaterThanOrEqual(-1e-6);
+        expect(box.left + box.width).toBeLessThanOrEqual(frame.width + 1e-6);
+        expect(box.top + box.height).toBeLessThanOrEqual(frame.height + 1e-6);
+        const touches = Math.abs(box.width - frame.width) < 1e-6 || Math.abs(box.height - frame.height) < 1e-6;
+        expect(touches).toBe(true);
       }
     }
   });
@@ -258,21 +310,60 @@ describe('containedBox', () => {
   it('keeps the aspect ratio and centers the photo', () => {
     const photo = { width: 1600, height: 1066 };
     const frame = { width: 1080, height: 1920 };
-    const box = containedBox(photo, frame, kenBurns(0));
+    const box = containedBox(photo, frame);
     expect(box.width / box.height).toBeCloseTo(photo.width / photo.height, 6);
     expect(box.left * 2 + box.width).toBeCloseTo(frame.width, 6);
     expect(box.top * 2 + box.height).toBeCloseTo(frame.height, 6);
-    // A landscape photo in 9:16 still takes most of the width.
-    expect(box.width).toBeGreaterThan(0.85 * frame.width);
+  });
+
+  it('gives a landscape photo the full width of the 9:16 frame (the zoom is clipped to the box)', () => {
+    const box = containedBox({ width: 800, height: 600 }, { width: 1080, height: 1920 });
+    expect(box).toEqual({ left: 0, top: 555, width: 1080, height: 810 });
+    // 42 % of the height, against 37 % when the box left room for the zoom.
+    expect(box.height / 1920).toBeGreaterThan(0.42);
   });
 
   it('fills the frame when the photo size is unknown', () => {
-    expect(containedBox({ width: 0, height: 0 }, { width: 1080, height: 1920 }, kenBurns(0))).toEqual({
+    expect(containedBox({ width: 0, height: 0 }, { width: 1080, height: 1920 })).toEqual({
       left: 0,
       top: 0,
       width: 1080,
       height: 1920,
     });
+  });
+});
+
+describe('photoBaseScale and zoomPeak', () => {
+  const vertical = { width: 1080, height: 1920 };
+  const horizontal = { width: 1920, height: 1080 };
+  const leboncoin = { width: 800, height: 600 };
+
+  it('is the enlargement of a photo before its zoom, covered or contained', () => {
+    // Covered in 16:9: 800x600 drawn 1920x1440.
+    expect(photoBaseScale(leboncoin, horizontal)).toBeCloseTo(2.4, 6);
+    // Contained in 9:16: drawn 1080x810.
+    expect(photoBaseScale(leboncoin, vertical)).toBeCloseTo(1.35, 6);
+    expect(photoBaseScale({ width: 0, height: 0 }, horizontal)).toBe(1);
+  });
+
+  it('keeps an 800x600 photo at most MAX_UPSCALE times its size in 16:9, zoom included', () => {
+    const base = photoBaseScale(leboncoin, horizontal);
+    const peak = zoomPeak(base);
+    expect(peak).toBeLessThan(KEN_BURNS_PEAK);
+    expect(base * peak).toBeLessThanOrEqual(MAX_UPSCALE + 1e-9);
+    expect(base * peak).toBeGreaterThan(MAX_UPSCALE - 0.01);
+  });
+
+  it('keeps the full zoom on sharp photos and on the contained 9:16 photo', () => {
+    expect(zoomPeak(photoBaseScale({ width: 1600, height: 1200 }, horizontal))).toBe(KEN_BURNS_PEAK);
+    expect(zoomPeak(photoBaseScale({ width: 1920, height: 1080 }, horizontal))).toBe(KEN_BURNS_PEAK);
+    expect(zoomPeak(photoBaseScale(leboncoin, vertical))).toBe(KEN_BURNS_PEAK);
+  });
+
+  it('never stops the zoom completely, and falls back to the full zoom on a bad scale', () => {
+    expect(zoomPeak(4)).toBe(MIN_ZOOM_PEAK);
+    expect(zoomPeak(0)).toBe(KEN_BURNS_PEAK);
+    expect(zoomPeak(Number.NaN)).toBe(KEN_BURNS_PEAK);
   });
 });
 
@@ -333,5 +424,40 @@ describe('screenTexts', () => {
   it('leaves out blank texts', () => {
     const texts = screenTexts({ ...base, overlays: { title: 'Maison', subtitle: ' ', price: '', contact: '  ' } });
     expect(texts).toEqual({ title: 'Maison' });
+  });
+
+  it('prepares every text for display', () => {
+    const texts = screenTexts({
+      ...base,
+      overlays: {
+        title: "Maison d'architecte",
+        subtitle: '2019 · 68\u202F000 km',
+        price: '15\u202F990 €',
+        contact: "Garage de l'Étang",
+      },
+    });
+    expect(texts).toEqual({
+      title: 'Maison d’architecte',
+      subtitle: '2019 · 68\u00A0000 km',
+      price: '15\u00A0990 €',
+      contact: 'Garage de l’Étang',
+    });
+  });
+});
+
+describe('displayText', () => {
+  it('draws the narrow no-break space of the data as a no-break space, visible in Inter', () => {
+    expect(displayText('41\u202F000 kilomètres')).toBe('41\u00A0000 kilomètres');
+    expect(displayText('Prix\u202F: 1\u202F250\u202F000 €.')).toBe('Prix\u00A0: 1\u00A0250\u00A0000 €.');
+  });
+
+  it('curls an apostrophe between two letters and leaves other quotes alone', () => {
+    expect(displayText("Appel d'Urgence, l'annonce, aujourd'hui")).toBe('Appel d’Urgence, l’annonce, aujourd’hui');
+    expect(displayText("Tous les détails sont dans l’annonce.")).toBe('Tous les détails sont dans l’annonce.');
+    expect(displayText("'Neuve' 5' 12'")).toBe("'Neuve' 5' 12'");
+  });
+
+  it('leaves plain text unchanged', () => {
+    expect(displayText('Peugeot 308 · 68 000 km')).toBe('Peugeot 308 · 68 000 km');
   });
 });

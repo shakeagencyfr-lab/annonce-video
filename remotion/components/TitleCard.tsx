@@ -1,5 +1,5 @@
 import { AbsoluteFill, Easing, interpolate, useCurrentFrame } from 'remotion';
-import { COLORS, clamp, fitFontSize, useLayout } from './layout';
+import { COLORS, SeparatedText, clamp, fitFontSize, useLayout } from './layout';
 
 /** Opening card: title and subtitle over a dark scrim, visible from the first frame. */
 export function TitleCard({
@@ -30,7 +30,7 @@ export function TitleCard({
         style={{
           position: 'absolute',
           left: layout.sideMargin,
-          right: layout.vertical ? layout.sideMargin : layout.width * 0.4,
+          right: layout.vertical ? layout.textRight : layout.width * 0.4,
           ...layout.title,
           transform: `translateY(${rise}px)`,
         }}
@@ -67,7 +67,7 @@ export function TitleCard({
               textShadow: '0 2px 16px rgba(0,0,0,0.5)',
             }}
           >
-            {subtitle}
+            <SeparatedText text={subtitle} />
           </div>
         ) : null}
       </div>

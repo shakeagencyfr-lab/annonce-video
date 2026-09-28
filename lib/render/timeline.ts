@@ -47,6 +47,19 @@ export function photoSchedule(count: number, durationInFrames: number, fps: numb
   });
 }
 
+/**
+ * The photo track: photos scheduled over the time before the end card, plus the
+ * crossfade into its veil, so that none is only ever seen under the card. The last
+ * photo then holds under the card until the end of the video.
+ */
+export function photoTrackSchedule(count: number, durationInFrames: number, fps: number): Slot[] {
+  const until = Math.min(durationInFrames, endCardFrom(durationInFrames, fps) + secToFrames(CROSSFADE_SEC, fps));
+  const slots = photoSchedule(count, until, fps);
+  const last = slots.at(-1);
+  if (!last) return slots;
+  return [...slots.slice(0, -1), { from: last.from, durationInFrames: durationInFrames - last.from }];
+}
+
 /** Opacity of a photo fading in over the previous one, from its first frame. */
 export function fadeInOpacity(frameInSlot: number, fadeFrames: number): number {
   if (fadeFrames <= 0) return 1;
@@ -54,25 +67,49 @@ export function fadeInOpacity(frameInSlot: number, fadeFrames: number): number {
 }
 
 /**
- * Slow zoom of a photo, in or out between 1.0 and 1.1, around a focus point given in
- * percent of the photo (CSS transform-origin). A scale of at least 1 around a point
- * inside the photo never uncovers its edges. The view drifts toward the focus point
- * on a zoom in and away from it on a zoom out, so drift = (originX - 50) *
- * (toScale - fromScale) alternates left and right from one photo to the next.
+ * Slow zoom of a photo, in or out between 1.0 and its peak (1.1 by default), around a
+ * focus point given in percent of the photo (CSS transform-origin). A scale of at
+ * least 1 around a point inside the photo never uncovers its edges. The view drifts
+ * toward the focus point on a zoom in and away from it on a zoom out, so drift =
+ * (originX - 50) * (toScale - fromScale) alternates left and right from one photo to
+ * the next.
  */
 export type KenBurns = { fromScale: number; toScale: number; originX: number; originY: number };
 
+/** Peak of the slow zoom on a photo sharp enough for it. */
+export const KEN_BURNS_PEAK = 1.1;
+
 const KEN_BURNS: readonly KenBurns[] = [
-  { fromScale: 1, toScale: 1.1, originX: 30, originY: 45 },
-  { fromScale: 1, toScale: 1.1, originX: 70, originY: 55 },
-  { fromScale: 1.1, toScale: 1, originX: 70, originY: 45 },
-  { fromScale: 1.1, toScale: 1, originX: 30, originY: 55 },
+  { fromScale: 1, toScale: KEN_BURNS_PEAK, originX: 30, originY: 45 },
+  { fromScale: 1, toScale: KEN_BURNS_PEAK, originX: 70, originY: 55 },
+  { fromScale: KEN_BURNS_PEAK, toScale: 1, originX: 70, originY: 45 },
+  { fromScale: KEN_BURNS_PEAK, toScale: 1, originX: 30, originY: 55 },
 ];
 
-/** Deterministic Ken Burns move of the photo at a position in the video. */
-export function kenBurns(indexSeed: number): KenBurns {
+/** Deterministic Ken Burns move of the photo at a position in the video, up to `peak`. */
+export function kenBurns(indexSeed: number, peak: number = KEN_BURNS_PEAK): KenBurns {
   const i = ((Math.trunc(indexSeed) % KEN_BURNS.length) + KEN_BURNS.length) % KEN_BURNS.length;
-  return KEN_BURNS[i] ?? KEN_BURNS[0]!;
+  const move = KEN_BURNS[i] ?? KEN_BURNS[0]!;
+  const scale = (s: number) => (s > 1 ? peak : 1);
+  return { ...move, fromScale: scale(move.fromScale), toScale: scale(move.toScale) };
+}
+
+/**
+ * Largest enlargement of a source photo, zoom included. Leboncoin serves 800×600 at
+ * most: covered in 16:9, it is already drawn 2.4 times its size, and the full zoom
+ * would take it to 2.64 times, visibly soft.
+ */
+export const MAX_UPSCALE = 2.5;
+/** Smallest zoom peak, so that a low-resolution photo still moves a little. */
+export const MIN_ZOOM_PEAK = 1.02;
+
+/**
+ * Peak of the slow zoom for a photo drawn at `baseScale` times its size: the full
+ * KEN_BURNS_PEAK while the enlargement stays within MAX_UPSCALE, less on small photos.
+ */
+export function zoomPeak(baseScale: number): number {
+  if (!(baseScale > 0)) return KEN_BURNS_PEAK;
+  return Math.min(KEN_BURNS_PEAK, Math.max(MIN_ZOOM_PEAK, MAX_UPSCALE / baseScale));
 }
 
 /** Scale at a point of the move, progress from 0 (slot start) to 1 (slot end). */
@@ -113,24 +150,25 @@ export function photoFit(photo: Size, frame: Size): 'cover' | 'contain' {
 export type Box = { left: number; top: number; width: number; height: number };
 
 /**
- * Where a contained photo sits: centered, as large as possible while its Ken Burns
- * move, scaled around its origin (percent of this box), never pushes an edge out of
- * the frame. A contained photo is thus never cropped, even at the top of its zoom.
+ * Where a contained photo sits: centered, as large as the frame allows. Its Ken Burns
+ * move is clipped to this box (remotion/components/Photos.tsx) instead of shrinking
+ * the box to leave room for the zoom, so a landscape photo spans the whole width of
+ * the 9:16 frame.
  */
-export function containedBox(photo: Size, frame: Size, move: KenBurns): Box {
+export function containedBox(photo: Size, frame: Size): Box {
   if (photo.width <= 0 || photo.height <= 0) return { left: 0, top: 0, ...frame };
-  const grow = Math.max(move.fromScale, move.toScale, 1) - 1;
-  // A centered box of size s scaled by 1 + grow around a point at share o of it
-  // spreads by o·grow·s on one side and (1 − o)·grow·s on the other; each must fit
-  // in the margin (frame − s) / 2, so s ≤ frame / (1 + 2·grow·max(o, 1 − o)).
-  const spread = (originPercent: number) => 1 + (2 * grow * Math.max(originPercent, 100 - originPercent)) / 100;
-  const fit = Math.min(
-    frame.width / (photo.width * spread(move.originX)),
-    frame.height / (photo.height * spread(move.originY)),
-  );
+  const fit = Math.min(frame.width / photo.width, frame.height / photo.height);
   const width = photo.width * fit;
   const height = photo.height * fit;
   return { left: (frame.width - width) / 2, top: (frame.height - height) / 2, width, height };
+}
+
+/** How many times its own size a photo is drawn before its zoom, covered or contained. */
+export function photoBaseScale(photo: Size, frame: Size): number {
+  if (photo.width <= 0 || photo.height <= 0) return 1;
+  const x = frame.width / photo.width;
+  const y = frame.height / photo.height;
+  return photoFit(photo, frame) === 'cover' ? Math.max(x, y) : Math.min(x, y);
 }
 
 /** Background music level under the voice. */
@@ -152,16 +190,28 @@ export type ScreenTexts = {
   dpe?: NonNullable<VideoProps['dpe']>;
 };
 
-const nonBlank = (text: string | undefined) => (text?.trim() ? text : undefined);
+/**
+ * A text as drawn on screen. The data writes « 41 000 » with a narrow no-break space
+ * (U+202F), which the voice and the fact check rely on, but the Latin subset of Inter
+ * has no glyph for it and the fallback is nearly invisible at 1080p: a no-break space
+ * (U+00A0) keeps the digits together with a visible gap. An apostrophe between two
+ * letters becomes the typographic one used by the other texts (« l’annonce »).
+ */
+export function displayText(text: string): string {
+  return text.replace(/\u202F/g, '\u00A0').replace(/(\p{L})'(?=\p{L})/gu, '$1’');
+}
+
+const nonBlank = (text: string | undefined) => (text?.trim() ? displayText(text) : undefined);
 
 /**
- * What the video writes on screen. The listing variant never shows the price nor the
- * contact, whatever the props hold (CLAUDE.md, "Modèles vidéo"); the DPE class read
- * from the listing is shown on immo videos only (rule 5). Blank texts are left out.
+ * What the video writes on screen, ready to draw (displayText). The listing variant
+ * never shows the price nor the contact, whatever the props hold (CLAUDE.md, "Modèles
+ * vidéo"); the DPE class read from the listing is shown on immo videos only (rule 5).
+ * Blank texts are left out.
  */
 export function screenTexts(props: Pick<VideoProps, 'variant' | 'vertical' | 'overlays' | 'dpe'>): ScreenTexts {
   const social = props.variant === 'social';
-  const texts: ScreenTexts = { title: props.overlays.title };
+  const texts: ScreenTexts = { title: displayText(props.overlays.title) };
   const subtitle = nonBlank(props.overlays.subtitle);
   const price = social ? nonBlank(props.overlays.price) : undefined;
   const contact = social ? nonBlank(props.overlays.contact) : undefined;
