@@ -172,10 +172,13 @@ Conséquences :
   l'ancien hôte sans signature sert toujours les photos.
 - **Taille des photos, à vérifier à l'étape 1** : les vidéos sont en 1080×1920 et 1920×1080,
   et les fichiers testés sont petits. Ce que la recherche indique, plateforme par plateforme :
-  - Leboncoin : pas de signature, taille choisie par `?rule=` (`ad-image` ~345×460,
-    `ad-large` ~600×800, `classified-1200x800-webp`). Le format suit l'en-tête `Accept`
-    (WebP possible malgré l'extension `.jpg`). Les photos risquent d'être petites pour de la
-    vidéo HD : c'est à mesurer.
+  - Leboncoin : pas de signature, taille choisie par `?rule=`. Ce sont des tailles
+    maximales, pas des tailles fixes. Mesuré le 28/09/2026 sur une photo paysage :
+    `ad-small` 375×300, `ad-image` 613×460, `ad-large` 800×600, en JPEG malgré un en-tête
+    `Accept` qui accepte le WebP. `classified-1200x800-webp` donne du WebP mais pas plus de
+    pixels (800×600) : `ad-large` est la plus grande taille. En 16:9, une photo de 800 px de
+    large est donc agrandie 2,4 fois. Une annonce pro réelle avait 42 photos (le tableau
+    de CLAUDE.md en prévoit 30 au plus).
   - AutoScout24 : pas de signature, toute taille prévue par le suffixe
     (`…jpg/1920x1080.webp`).
   - La Centrale : l'ancien hôte sans signature sert `1096x829`, sans filigrane (les vignettes

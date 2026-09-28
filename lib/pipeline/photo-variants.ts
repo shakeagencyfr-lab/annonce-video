@@ -10,7 +10,11 @@ const AUTOSCOUT24_SIZE = /\/(\d+)x(\d+)\.(?:webp|jpe?g)$/i;
 const FULL_HD = { width: 1920, height: 1080 };
 const AUTOSCOUT24_FULL_HD = `/${FULL_HD.width}x${FULL_HD.height}.webp`;
 
-/** Leboncoin picks the size with `?rule=`: these are smaller than `ad-large` (~600×800). */
+/**
+ * Leboncoin picks the size with `?rule=`, a bounding box rather than a fixed size. On a
+ * landscape photo (28/09/2026): ad-small 375x300, ad-image 613x460, ad-large 800x600.
+ * `classified-1200x800-webp` gives no more pixels than ad-large, the largest one.
+ */
 const LEBONCOIN_SMALL_RULES = new Set(['ad-thumb', 'ad-small', 'ad-image']);
 const LEBONCOIN_LARGE_RULE = 'ad-large';
 

@@ -7,7 +7,7 @@ import { MODELS } from '../config';
 import { claudeUsageLine } from '../costs';
 import { ACCEPT_IMAGE, DEFAULT_USER_AGENT, requestHeaders } from '../probe/fetch';
 import { sniffImage } from '../probe/images';
-import { photosFinalPrompt, photosRetryPrompt, photosSystemPrompt, photosUserPrompt } from '../prompts/photos.v1';
+import { photosFinalPrompt, photosRetryPrompt, photosSystemPrompt, photosUserPrompt } from '../prompts/photos.v2';
 import type { Sheet } from '../sheet';
 import { largestVariant } from './photo-variants';
 import {
@@ -25,10 +25,21 @@ import {
 // Download
 // ---------------------------------------------------------------------------
 
-/** Photos read per listing: more would not fit a 30 to 60 s video. */
-export const MAX_PHOTOS = 20;
+/**
+ * Most photos of the listing offered to the sort: this bounds the candidates, not the
+ * photos kept (PHOTO_COUNT). A real pro Leboncoin ad had 42, with its best shots among
+ * the last ones. Still one listing, fetched on demand: rule 1 is unaffected.
+ */
+export const MAX_PHOTOS = 50;
+/** 3 at a time: the 42 photos (~100 KB each) of a Leboncoin ad took 3 s (28/09/2026). */
 const CONCURRENCY = 3;
+/** Per attempt; a photo makes two when its bigger variant fails. */
 const TIMEOUT_MS = 15_000;
+/**
+ * No photo is started after this, so a host that lets every request time out cannot
+ * hold the order for 50 x 2 x 15 s / 3 (over 8 min): the photos already downloaded are used.
+ */
+const DOWNLOAD_BUDGET_MS = 90_000;
 const MAX_BYTES = 15 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 
@@ -194,7 +205,8 @@ async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, fn: 
 /**
  * Downloads the sheet's photos (the first MAX_PHOTOS) into dir as photo-{index}.{ext},
  * each in its biggest known variant, falling back once to the URL as given. A photo
- * that fails is recorded in failures, never thrown.
+ * that fails, or is not started within DOWNLOAD_BUDGET_MS, is recorded in failures,
+ * never thrown.
  */
 export async function downloadPhotos(
   sheet: Sheet,
@@ -203,7 +215,12 @@ export async function downloadPhotos(
 ): Promise<{ photos: LocalPhoto[]; failures: PhotoFailure[] }> {
   await mkdir(dir, { recursive: true });
   const jobs = sheet.photos.slice(0, MAX_PHOTOS).map((photo, index) => ({ index, url: photo.url }));
-  const results = await mapWithConcurrency(jobs, CONCURRENCY, ({ index, url }) => downloadOne(index, url, dir, deps.fetch));
+  const deadline = Date.now() + DOWNLOAD_BUDGET_MS;
+  const results = await mapWithConcurrency(jobs, CONCURRENCY, async ({ index, url }): Promise<LocalPhoto | PhotoFailure> =>
+    Date.now() > deadline
+      ? { index, url, reason: `pas commencée : délai total dépassé (${DOWNLOAD_BUDGET_MS / 1000} s)` }
+      : downloadOne(index, url, dir, deps.fetch),
+  );
   const photos: LocalPhoto[] = [];
   const failures: PhotoFailure[] = [];
   for (const r of results) {
@@ -217,8 +234,12 @@ export async function downloadPhotos(
 // Selection (Claude, vision)
 // ---------------------------------------------------------------------------
 
-/** Long edge of the copies sent to Claude: enough to judge sharpness and framing. */
-const PREVIEW_EDGE = 768;
+/**
+ * Long edge of the copies sent to Claude: enough to judge sharpness and framing. An
+ * image costs about width x height / 750 tokens: 512x384 is ~262, so 50 candidates
+ * (~13k tokens) cost about what 20 did at 768x576 (~590 each, ~11.8k).
+ */
+const PREVIEW_EDGE = 512;
 const PREVIEW_QUALITY = 70;
 
 function selectionSchema(vertical: Sheet['vertical']) {

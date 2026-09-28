@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { largestVariant } from '@/lib/pipeline/photo-variants';
 import { downloadPhotos, MAX_PHOTOS, selectPhotos } from '@/lib/pipeline/photos';
 import { PHOTO_ROLES, type ClaudeClient, type LocalPhoto } from '@/lib/pipeline/types';
-import { PHOTOS_PROMPT_VERSION, photosSystemPrompt } from '@/lib/prompts/photos.v1';
+import { PHOTOS_PROMPT_VERSION, photosSystemPrompt } from '@/lib/prompts/photos.v2';
 import { ACCEPT_IMAGE, DEFAULT_USER_AGENT } from '@/lib/probe/fetch';
 import { parseSheet, type Sheet } from '@/lib/sheet';
 
@@ -179,7 +179,7 @@ describe('downloadPhotos', () => {
     expect(failures).toEqual([{ index: 1, url: LACENTRALE, reason: 'adresse refusée : https uniquement' }]);
   });
 
-  it('refuses local hosts, oversized files and slow hosts, and reads 20 photos at most', async () => {
+  it('refuses local hosts, oversized files and slow hosts, and reads MAX_PHOTOS photos at most', async () => {
     const small = await image(64, 48);
     const { fetch, calls } = fakeFetch({
       [PAP]: () => new Response(new Uint8Array(small), { status: 200, headers: { 'content-length': String(16 * 1024 * 1024) } }),
@@ -207,11 +207,41 @@ describe('downloadPhotos', () => {
     expect(local.failures.map((f) => f.reason)).toEqual(Array(4).fill('adresse refusée : hôte local ou IP'));
     expect(calls).toHaveLength(2);
 
+    // A real pro listing had 42 photos: all of them are offered to the sort.
+    expect(MAX_PHOTOS).toBeGreaterThanOrEqual(42);
     const many = fakeFetch({});
     const urls = Array.from({ length: MAX_PHOTOS + 5 }, (_, i) => `https://cdn.pap.fr/photos/pap/${i}-p2.webp`);
     const result = await downloadPhotos(withPhotos(auto, urls), join(tmp, 'many'), { fetch: many.fetch });
     expect(many.calls).toHaveLength(MAX_PHOTOS);
     expect(result.failures.map((f) => f.index)).toEqual(Array.from({ length: MAX_PHOTOS }, (_, i) => i));
+  });
+
+  it('starts no photo once the total download budget is spent, and keeps the ones downloaded', async () => {
+    const good = await image(800, 600);
+    const urls = Array.from({ length: 8 }, (_, i) => `https://cdn.pap.fr/photos/pap/${i}-p2.webp`);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const { fetch, calls } = fakeFetch(
+        Object.fromEntries(
+          urls.map((url, i) => [
+            url,
+            () => {
+              // The fourth photo is answered after 91 s: none is started after it.
+              if (i === 3) vi.setSystemTime(Date.now() + 91_000);
+              return serve(good)();
+            },
+          ]),
+        ),
+      );
+      const { photos, failures } = await downloadPhotos(withPhotos(auto, urls), join(tmp, 'budget'), { fetch });
+      expect(photos.map((p) => p.index)).toEqual([0, 1, 2, 3]);
+      expect(failures).toEqual(
+        urls.slice(4).map((url, i) => ({ index: i + 4, url, reason: 'pas commencée : délai total dépassé (90 s)' })),
+      );
+      expect(calls).toHaveLength(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('gives short French reasons for undeclared oversized bodies, corrupt images, network errors and bad redirects', async () => {
@@ -382,8 +412,8 @@ describe('selectPhotos', () => {
     const first = blocks[0]?.source;
     expect(first).toMatchObject({ type: 'base64', media_type: 'image/jpeg' });
     const meta = await sharp(Buffer.from((first as Anthropic.Base64ImageSource).data, 'base64')).metadata();
-    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 768, 576]);
-    expect(PHOTOS_PROMPT_VERSION).toBe('photos.v1');
+    expect([meta.format, meta.width, meta.height]).toEqual(['jpeg', 512, 384]);
+    expect(PHOTOS_PROMPT_VERSION).toBe('photos.v2');
   });
 
   it('goes through the real SDK: the body sent carries the JSON schema and no sampling settings', async () => {
@@ -520,5 +550,21 @@ describe('photosSystemPrompt', () => {
       // No role hint may place a photo elsewhere (e.g. "plan en dernier" while "autre" follows it).
       expect(prompt).not.toMatch(/en dernier|en premier/);
     }
+  });
+
+  it('rejects mostly-logo visuals and connected phone screens, not watermarks or the dealer sign behind the car', () => {
+    for (const vertical of ['auto', 'immo'] as const) {
+      const prompt = photosSystemPrompt(vertical);
+      expect(prompt).toContain('les visuels faits surtout d’un logo, d’une bannière, d’une publicité ou de texte');
+      expect(prompt).toContain('les photos d’un écran qui affiche un téléphone connecté (applications, notifications, messages)');
+      expect(prompt).toContain('Ne sont pas des raisons d’écarter une photo :\n- un filigrane ou un petit logo dans un coin');
+      expect(prompt).toContain('« leboncoin »');
+      // Both formats use the same photos, and the listing one shows neither price nor phone.
+      expect(prompt).toContain('À cadrage égal, préfère une photo où aucun numéro de téléphone ni aucun prix n’est lisible');
+      // v1 rejected any "logo" or "bannière de garage", which covered a car shot in front of the dealer's sign.
+      expect(prompt).not.toContain('bannières de garage');
+    }
+    expect(photosSystemPrompt('auto')).toContain('l’enseigne ou le logo du garage à l’arrière-plan d’une vraie photo de la voiture');
+    expect(photosSystemPrompt('immo')).not.toContain('garage à l’arrière-plan');
   });
 });
