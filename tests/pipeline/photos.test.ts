@@ -63,7 +63,8 @@ describe('largestVariant', () => {
     expect(largestVariant(`${LBC}?rule=ad-large`)).toBe(`${LBC}?rule=ad-large`);
     expect(largestVariant(`${LBC}?rule=ad-image`)).toBe(`${LBC}?rule=ad-large`);
     expect(largestVariant(`${LBC}?a=b%20c&rule=ad-thumb&z=1`)).toBe(`${LBC}?a=b%20c&rule=ad-large&z=1`);
-    // Unknown rules may be bigger, a missing rule may be the original: not rewritten.
+    // Other rules are kept (classified-1200x800-webp measured no bigger than ad-large), and so
+    // is a missing rule, which may be the original.
     expect(largestVariant(`${LBC}?rule=classified-1200x800-webp`)).toBe(`${LBC}?rule=classified-1200x800-webp`);
     expect(largestVariant(LBC)).toBe(LBC);
   });
