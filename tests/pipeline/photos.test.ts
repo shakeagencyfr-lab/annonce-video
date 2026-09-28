@@ -552,11 +552,11 @@ describe('photosSystemPrompt', () => {
     }
   });
 
-  it('rejects mostly-logo visuals and connected phone screens, not watermarks or the dealer sign behind the car', () => {
+  it('rejects mostly-logo visuals and close-ups of connected phone screens, not watermarks, the dealer sign or a dashboard overview', () => {
     for (const vertical of ['auto', 'immo'] as const) {
       const prompt = photosSystemPrompt(vertical);
       expect(prompt).toContain('les visuels faits surtout d’un logo, d’une bannière, d’une publicité ou de texte');
-      expect(prompt).toContain('les photos d’un écran qui affiche un téléphone connecté (applications, notifications, messages)');
+      expect(prompt).toContain('les gros plans d’un écran qui affiche un téléphone connecté (applications, notifications, messages)');
       expect(prompt).toContain('Ne sont pas des raisons d’écarter une photo :\n- un filigrane ou un petit logo dans un coin');
       expect(prompt).toContain('« leboncoin »');
       // Both formats use the same photos, and the listing one shows neither price nor phone.
@@ -565,6 +565,10 @@ describe('photosSystemPrompt', () => {
       expect(prompt).not.toContain('bannières de garage');
     }
     expect(photosSystemPrompt('auto')).toContain('l’enseigne ou le logo du garage à l’arrière-plan d’une vraie photo de la voiture');
+    // A wide dashboard shot shows the centre screen, often in phone mode: only close-ups of it are rejected.
+    expect(photosSystemPrompt('auto')).toContain('vu en petit dans une vue d’ensemble du tableau de bord : c’est une photo du tableau de bord');
     expect(photosSystemPrompt('immo')).not.toContain('garage à l’arrière-plan');
+    expect(photosSystemPrompt('auto')).toContain('n’est lisible (enseigne, affichette, pare-brise)');
+    expect(photosSystemPrompt('immo')).toContain('n’est lisible (panneau « à vendre », affichette, vitrine)');
   });
 });

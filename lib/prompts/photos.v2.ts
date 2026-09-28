@@ -31,14 +31,22 @@ const ROLE_HINTS: Record<Vertical, string> = {
 /**
  * What must not get a photo rejected. A real listing's photos all carry the platform's
  * watermark, and a dealer shoots its cars in front of its own sign: only a visual that
- * is mostly a logo, a banner or an advert is rejected.
+ * is mostly a logo, a banner or an advert is rejected. A wide dashboard shot often shows
+ * the centre screen in phone mode (CarPlay…): only a close-up of such a screen is rejected.
  */
 const NOT_REASONS: Record<Vertical, string> = {
   auto: [
     '- un filigrane ou un petit logo dans un coin : celui de la plateforme (« leboncoin », par exemple) ou celui du vendeur ;',
-    '- l’enseigne ou le logo du garage à l’arrière-plan d’une vraie photo de la voiture prise devant ses locaux : c’est une photo de la voiture, pas un logo.',
+    '- l’enseigne ou le logo du garage à l’arrière-plan d’une vraie photo de la voiture prise devant ses locaux : c’est une photo de la voiture, pas un logo ;',
+    '- un écran qui affiche un téléphone connecté, vu en petit dans une vue d’ensemble du tableau de bord : c’est une photo du tableau de bord.',
   ].join('\n'),
   immo: '- un filigrane ou un petit logo dans un coin : celui de la plateforme (« leboncoin », par exemple) ou celui de l’agence.',
+};
+
+/** Where a phone number or a price shows up in the photos themselves. */
+const PHONE_PRICE_PLACES: Record<Vertical, string> = {
+  auto: 'enseigne, affichette, pare-brise',
+  immo: 'panneau « à vendre », affichette, vitrine',
 };
 
 /** Instructions for the photo sort. The model only picks and orders: it never describes the listing. */
@@ -51,7 +59,7 @@ export function photosSystemPrompt(vertical: Vertical): string {
 - les doublons et quasi-doublons (même vue, même cadrage, ou le même écran photographié sur plusieurs menus) : garde la meilleure et écarte les autres ;
 - les photos floues, trop sombres, surexposées, pixelisées ou trop petites ;
 - les visuels faits surtout d’un logo, d’une bannière, d’une publicité ou de texte (garage, agence, offre de financement), les montages et les captures d’écran ;
-- les photos d’un écran qui affiche un téléphone connecté (applications, notifications, messages) ;
+- les gros plans d’un écran qui affiche un téléphone connecté (applications, notifications, messages) ;
 - les photos de documents (carte grise, factures, carnet d’entretien…)${vertical === 'immo' ? ', sauf les plans du logement' : ''}.
 
 Ne sont pas des raisons d’écarter une photo :
@@ -59,7 +67,7 @@ ${NOT_REASONS[vertical]}
 
 Garde entre ${min} et ${max} photos. S’il y a plus de ${max} photos utilisables, garde les plus nettes et les plus variées. S’il y a moins de ${min} photos utilisables, garde-les toutes : n’ajoute jamais une photo inutilisable pour atteindre ${min}.
 
-À cadrage égal, préfère une photo où aucun numéro de téléphone ni aucun prix n’est lisible (enseigne, affichette, pare-brise) : la vidéo destinée à l’annonce ne doit montrer ni l’un ni l’autre.
+À cadrage égal, préfère une photo où aucun numéro de téléphone ni aucun prix n’est lisible (${PHONE_PRICE_PLACES[vertical]}) : la vidéo destinée à l’annonce ne doit montrer ni l’un ni l’autre.
 
 Donne à chaque photo gardée un seul rôle parmi : ${roles.map((r) => `« ${r} »`).join(', ')}.
 ${ROLE_HINTS[vertical]}
