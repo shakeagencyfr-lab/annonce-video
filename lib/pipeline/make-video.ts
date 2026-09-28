@@ -8,7 +8,7 @@ import { renderVideos } from '../render/local';
 import { COMPOSITION_ID, DIMENSIONS, FPS, type VideoProps } from '../render/props';
 import type { Sheet } from '../sheet';
 import { loadLocalPhotos } from './local-photos';
-import { downloadPhotos, selectPhotos } from './photos';
+import { downloadPhotos, MAX_PHOTOS, selectPhotos } from './photos';
 import { produceCheckedScripts } from './script';
 import { buildCues } from './subtitles';
 import { templateScripts } from './template-script';
@@ -67,11 +67,20 @@ function slug(sheet: Sheet): string {
   return `${sheet.platform}-${id}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
 }
 
+/**
+ * Without the vision sort: an evenly spaced sample (positions round(i * n / max)), so the
+ * offline video shows the whole listing rather than its first photos only.
+ */
 function offlineSelection(photos: LocalPhoto[], sheet: Sheet): PhotoSelection {
   const max = PHOTO_COUNT[sheet.vertical].max;
+  const n = photos.length;
+  // n > max makes the step above 1, so the rounded positions are distinct.
+  const kept = new Set(n <= max ? photos.keys() : Array.from({ length: max }, (_, i) => Math.round((i * n) / max)));
   return {
-    selected: photos.slice(0, max).map((p) => ({ ...p, role: 'autre' as const })),
-    rejected: photos.slice(max).map((p) => ({ index: p.index, reason: 'au-delà du nombre de photos retenues (mode hors ligne)' })),
+    selected: photos.filter((_, i) => kept.has(i)).map((p) => ({ ...p, role: 'autre' as const })),
+    rejected: photos
+      .filter((_, i) => !kept.has(i))
+      .map((p) => ({ index: p.index, reason: 'hors de l’échantillon régulier retenu (mode hors ligne)' })),
   };
 }
 
@@ -128,7 +137,7 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
   log('2/6 Photos');
   let photos: LocalPhoto[];
   if (options.photosDir) {
-    photos = await loadLocalPhotos(options.photosDir, publicDir);
+    photos = await loadLocalPhotos(options.photosDir, publicDir, MAX_PHOTOS);
     log(`    ${photos.length} photo(s) locale(s) depuis ${options.photosDir}`);
   } else {
     const downloaded = await downloadPhotos(sheet, publicDir);
@@ -185,11 +194,12 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
     usage.push(result.usage);
     voices.set(v, { voice: result.voiceover, file: basename(result.voiceover.audioPath) });
   }
+  const target = DURATION_SEC[sheet.vertical];
   for (const [v, { voice }] of voices) {
-    const target = DURATION_SEC[sheet.vertical];
     log(`    [${v}] ${voice.durationSec.toFixed(1)} s${options.offline ? ' (estimée, vidéo muette)' : ''}`);
-    if (voice.durationSec < target.min - 5 || voice.durationSec > target.max + 5) {
-      warnings.push(`[${v}] voix de ${voice.durationSec.toFixed(1)} s, hors de la cible ${target.min}-${target.max} s`);
+    if (voice.durationSec < target.min || voice.durationSec > target.max) {
+      const seconds = `${voice.durationSec.toFixed(1)} s${options.offline ? ' (estimée)' : ''}`;
+      warnings.push(`[${v}] durée cible manquée : voix de ${seconds}, pour ${target.min} à ${target.max} s attendues`);
     }
   }
 

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeVideo, type MakeVideoDeps } from '@/lib/pipeline/make-video';
-import type { VideoScript, Voiceover } from '@/lib/pipeline/types';
+import type { Variant, VideoScript, Voiceover } from '@/lib/pipeline/types';
 import { estimateVoiceover } from '@/lib/pipeline/voice';
 import type { RenderOptions } from '@/lib/render/local';
 import { cleanAnswer, fakeClaude } from './script-helpers';
@@ -34,7 +34,8 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function fakes() {
+/** durations: voice length per variant; by default the estimate from the script. */
+function fakes(durations: Partial<Record<Variant, number>> = {}) {
   const selection = {
     selected: [0, 1, 2, 3, 4, 5, 6, 7, 8].map((index, i) => ({
       index,
@@ -51,7 +52,8 @@ function fakes() {
     ttsCalls.push({ script, voiceId: deps.voiceId });
     const audioPath = join(deps.outDir, `voice-${script.variant}.mp3`);
     await writeFile(audioPath, 'fake mp3');
-    const voiceover: Voiceover = { ...estimateVoiceover(script), audioPath };
+    const estimate = estimateVoiceover(script);
+    const voiceover: Voiceover = { ...estimate, audioPath, durationSec: durations[script.variant] ?? estimate.durationSec };
     const text = script.segments.map((s) => s.text).join(' ');
     return { voiceover, usage: { step: 'voix', model: 'eleven_multilingual_v2', ttsCharacters: text.length, costUsd: (text.length / 1000) * 0.3 } };
   };
@@ -161,5 +163,43 @@ describe('makeVideo (online path, with fakes)', () => {
     expect(f.ttsCalls).toHaveLength(0);
     expect(f.renders[0]?.jobs[0]?.props.voiceSrc).toBeUndefined();
     expect(result.costs.totalUsd).toBe(0);
+    // The template voice is short: the estimate misses the 30-40 s target, and says so.
+    expect(result.warnings).toEqual([expect.stringMatching(/^\[listing\] durée cible manquée : voix de \d+\.\d s \(estimée\), pour 30 à 40 s attendues$/)]);
+  });
+
+  it('offline, keeps an evenly spaced sample of all the photos, not the first ones', async () => {
+    const many = join(dir, 'many');
+    await import('node:fs/promises').then((fs) => fs.mkdir(many));
+    const img = await sharp({ create: { width: 320, height: 240, channels: 3, background: '#468' } }).jpeg().toBuffer();
+    // 23 photos: more than the old 20-photo cap, and not a multiple of the 10 kept.
+    for (let i = 0; i < 23; i++) await writeFile(join(many, `p${String(i).padStart(2, '0')}.jpg`), img);
+    const f = fakes();
+    const logs: string[] = [];
+    await makeVideo(
+      { source: SHEET, language: 'fr', outRoot: join(dir, 'out'), offline: true, photosDir: many, preview: false, variants: ['listing'], log: (l) => logs.push(l) },
+      f.deps,
+    );
+    // Positions round(i * 23 / 10), i = 0..9.
+    const kept = [0, 2, 5, 7, 9, 12, 14, 16, 18, 21];
+    expect(f.renders[0]?.jobs[0]?.props.photos.map((p) => p.src)).toEqual(kept.map((i) => `photo-${i}.jpg`));
+    const rejected = logs.filter((l) => l.includes('écartée')).map((l) => Number(/écartée (\d+)/.exec(l)?.[1]));
+    expect(rejected).toEqual(Array.from({ length: 23 }, (_, i) => i).filter((i) => !kept.includes(i)));
+    expect(logs).toContain('    écartée 22 : hors de l’échantillon régulier retenu (mode hors ligne)');
+  });
+
+  it('warns when a voice is outside the target duration, bounds included in the target', async () => {
+    const f = fakes({ social: 29.9, listing: 30 });
+    const result = await makeVideo(
+      { source: SHEET, language: 'fr', outRoot: join(dir, 'out'), offline: false, photosDir, preview: false, variants: ['social', 'listing'], log: () => {} },
+      f.deps,
+    );
+    expect(result.warnings).toEqual(['[social] durée cible manquée : voix de 29.9 s, pour 30 à 40 s attendues']);
+
+    const long = fakes({ social: 40, listing: 40.1 });
+    const again = await makeVideo(
+      { source: SHEET, language: 'fr', outRoot: join(dir, 'out'), offline: false, photosDir, preview: false, variants: ['social', 'listing'], log: () => {} },
+      long.deps,
+    );
+    expect(again.warnings).toEqual(['[listing] durée cible manquée : voix de 40.1 s, pour 30 à 40 s attendues']);
   });
 });
