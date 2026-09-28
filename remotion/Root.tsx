@@ -1,6 +1,7 @@
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/700.css';
 import '@fontsource/inter/800.css';
+import '@fontsource/inter/900.css';
 import { Composition, type CalculateMetadataFunction } from 'remotion';
 import type { Format } from '../lib/pipeline/types';
 import { COMPOSITION_ID, DIMENSIONS, FPS, type VideoProps } from '../lib/render/props';
@@ -37,6 +38,12 @@ function sampleProps(format: Format): VideoProps {
       subtitle: '2019 · 68 000 km · Essence',
       ...(social ? { price: '15 990 €', contact: 'Garage des Tests · Lyon' } : {}),
     },
+    specs: [
+      { label: 'Année', value: '2019', chip: '2019' },
+      { label: 'Kilométrage', value: '68 000 km', chip: '68 000 km' },
+      { label: 'Énergie', value: 'Essence', chip: 'Essence' },
+      { label: 'Boîte', value: 'Manuelle', chip: 'Manuelle' },
+    ],
     watermark: true,
   };
 }

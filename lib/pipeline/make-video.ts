@@ -6,6 +6,7 @@ import { summarizeCosts, type CostSummary } from '../costs';
 import { readSource } from '../readers';
 import { renderVideos } from '../render/local';
 import { COMPOSITION_ID, DIMENSIONS, FPS, type VideoProps } from '../render/props';
+import { sheetSpecs } from '../render/specs';
 import type { Sheet } from '../sheet';
 import { loadLocalPhotos } from './local-photos';
 import { downloadPhotos, selectPhotos } from './photos';
@@ -94,6 +95,7 @@ function videoProps(
     ...(opts.musicFile ? { musicSrc: opts.musicFile } : {}),
     subtitles: buildCues(voice.words, format),
     overlays: script.overlays,
+    specs: sheetSpecs(sheet, script.language),
     ...(sheet.vertical === 'immo' && sheet.dpe ? { dpe: sheet.dpe } : {}),
     watermark: opts.preview,
   };

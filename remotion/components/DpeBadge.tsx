@@ -15,19 +15,19 @@ const DPE_SCALE: { letter: DpeClass; background: string; text: string }[] = [
 ];
 
 /**
- * DPE class read from the listing (CLAUDE.md, rule 5), on every frame in the top-right
- * corner: the A to G scale with the class of the property enlarged.
+ * DPE class read from the listing (CLAUDE.md, rule 5), on every frame: the A to G
+ * scale with the class of the property enlarged, in the top-right corner of the photo
+ * in 9:16 and at the bottom of the side panel in 16:9, then in the end card (`inline`).
  */
-export function DpeBadge({ dpe }: { dpe: DpeClass }) {
+export function DpeBadge({ dpe, inline = false }: { dpe: DpeClass; inline?: boolean }) {
   const layout = useLayout();
-  const cell = layout.vertical ? 38 : 34;
+  const { cell, ...corner } = layout.dpe;
+  const position = inline ? { position: 'relative' as const } : { position: 'absolute' as const, ...corner };
   const active = Math.round(cell * 1.6);
   return (
     <div
       style={{
-        position: 'absolute',
-        right: layout.sideMargin,
-        top: layout.badgeTop,
+        ...position,
         display: 'flex',
         alignItems: 'center',
         gap: 6,

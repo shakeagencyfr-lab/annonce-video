@@ -1,4 +1,4 @@
-import type { SubtitleCue } from '../pipeline/types';
+import type { SubtitleCue, WordTiming } from '../pipeline/types';
 import type { VideoProps } from './props';
 
 /**
@@ -47,6 +47,32 @@ export function photoSchedule(count: number, durationInFrames: number, fps: numb
   });
 }
 
+/** Cubic ease in and out, for the push from one photo to the next. */
+export function easeInOutCubic(p: number): number {
+  const x = Math.min(1, Math.max(0, p));
+  return x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
+}
+
+/**
+ * Horizontal position of a photo in its frame, in frame widths: the next photo pushes
+ * the current one out to the left. A photo that `enters` comes in from the right (1 to
+ * 0) over its first `transitionFrames`; one that `exits` leaves to the left (0 to -1)
+ * over its last ones. With photoSchedule() the two moves overlap exactly, so the
+ * photos stay side by side.
+ */
+export function pushOffset(
+  frameInSlot: number,
+  slotFrames: number,
+  transitionFrames: number,
+  opts: { enters: boolean; exits: boolean },
+): number {
+  if (transitionFrames <= 0) return 0;
+  if (opts.enters && frameInSlot < transitionFrames) return 1 - easeInOutCubic(frameInSlot / transitionFrames);
+  const exitFrom = slotFrames - transitionFrames;
+  if (opts.exits && frameInSlot >= exitFrom) return -easeInOutCubic((frameInSlot - exitFrom) / transitionFrames);
+  return 0;
+}
+
 /** Opacity of a photo fading in over the previous one, from its first frame. */
 export function fadeInOpacity(frameInSlot: number, fadeFrames: number): number {
   if (fadeFrames <= 0) return 1;
@@ -91,6 +117,24 @@ export function endCardFrom(durationInFrames: number, fps: number): number {
 export function cueAtFrame(cues: readonly SubtitleCue[], frame: number, fps: number): SubtitleCue | undefined {
   const t = frame / fps;
   return cues.find((cue) => cue.start <= t && t < cue.end);
+}
+
+/** Index of the word being spoken at `timeSec` (the last one started), -1 before the first. */
+export function activeWordIndex(words: readonly WordTiming[], timeSec: number): number {
+  let active = -1;
+  for (const [i, w] of words.entries()) {
+    if (w.start <= timeSec) active = i;
+    else break;
+  }
+  return active;
+}
+
+/**
+ * Text as drawn on screen: the narrow no-break space of French numbers (68 000 km,
+ * 15 990 €) is almost invisible at video sizes, so it becomes a normal-width one.
+ */
+export function displayText(text: string): string {
+  return text.replace(/\u202F/g, '\u00A0');
 }
 
 /** Largest share of a photo that "cover" may crop before it is shown whole instead. */

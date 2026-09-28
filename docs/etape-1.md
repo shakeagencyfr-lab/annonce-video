@@ -21,6 +21,23 @@ Dans `out/<plateforme>-<id>-<date>/` (dossier ignoré par git) :
 
 `--preview` ajoute le filigrane « APERÇU ». `--only 9x16|16x9` ne rend qu'un format.
 
+## La mise en page
+
+Les photos Leboncoin font au plus 800×600 : en plein écran vertical, elles seraient agrandies
+plus de 3 fois et floues. Les deux formats gardent donc la photo entière dans un cadre 4:3.
+
+- **9:16** : titre en grand et pastilles des caractéristiques (année, km, énergie, boîte,
+  puissance ; surface, pièces… en immo) au-dessus de la photo ; photo sur toute la largeur,
+  zoom lent, la suivante pousse la précédente ; sous-titres en gros, le mot prononcé en jaune ;
+  prix et vendeur sous la photo ; fond : la photo floutée. Tout ce qui compte reste hors des
+  barres de TikTok, Reels et Shorts.
+- **16:9** : photo 1440×1080 à gauche, panneau « fiche technique » à droite, sous-titres sur
+  la photo ; ni prix ni téléphone.
+- **Fin** : titre, caractéristiques et, en 9:16, prix en très grand et vendeur.
+
+Les caractéristiques affichées sont reprises telles quelles de la fiche (`lib/render/specs.ts`),
+sans passer par Claude.
+
 ## Les garde-fous
 
 - **Aucune invention (règle 3).** Le script est écrit par Claude Sonnet 5 à partir de la seule
@@ -119,7 +136,7 @@ jusqu'au rendu, gratuitement. `npm run render-sample` rend un échantillon de 12
 
 ## Ce qui est vérifié, ce qui ne l'est pas encore
 
-- **Vérifié ici** : 307 tests (lecteurs, photos, script et contrôle anti-invention, voix,
+- **Vérifié ici** : 326 tests (lecteurs, photos, script et contrôle anti-invention, voix,
   sous-titres, rendu, orchestration avec des faux Claude et ElevenLabs) ; deux MP4 réels
   rendus hors ligne (1080×1920 et 1920×1080, 30 i/s), images contrôlées une à une.
 - **Pas encore vérifié** (pas de clés ni de réseau ici) : les vrais appels Claude et

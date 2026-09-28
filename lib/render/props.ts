@@ -1,4 +1,5 @@
 import type { Format, PhotoRole, SubtitleCue, Variant } from '../pipeline/types';
+import type { Spec } from './specs';
 
 /**
  * Input props of the Remotion compositions (remotion/). Every media path is a file
@@ -18,6 +19,8 @@ export type VideoProps = {
   musicSrc?: string;
   subtitles: SubtitleCue[];
   overlays: { title: string; subtitle?: string; price?: string; contact?: string };
+  /** Key facts of the sheet (year, mileage… or surface, rooms…), written as they are. */
+  specs: Spec[];
   /** DPE class read from the listing, immo only (rule 5). */
   dpe?: 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
   /** Watermark on previews only. */

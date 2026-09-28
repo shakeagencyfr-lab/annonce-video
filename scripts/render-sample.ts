@@ -105,6 +105,12 @@ function sampleProps(format: Format, variant: Variant, photos: VideoProps['photo
       subtitle: '2019 · 68 000 km · Essence',
       ...(social ? { price: '15 990 €', contact: 'Garage des Tests · Lyon' } : {}),
     },
+    specs: [
+      { label: 'Année', value: '2019', chip: '2019' },
+      { label: 'Kilométrage', value: '68 000 km', chip: '68 000 km' },
+      { label: 'Énergie', value: 'Essence', chip: 'Essence' },
+      { label: 'Boîte', value: 'Manuelle', chip: 'Manuelle' },
+    ],
     watermark: true,
   };
 }

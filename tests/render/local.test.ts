@@ -31,6 +31,7 @@ function props(format: VideoProps['format'], extra: Partial<VideoProps> = {}): V
     ],
     subtitles: [],
     overlays: { title: 'Peugeot 308' },
+    specs: [],
     watermark: true,
     ...extra,
   };

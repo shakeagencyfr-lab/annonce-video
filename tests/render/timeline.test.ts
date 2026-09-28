@@ -6,8 +6,11 @@ import {
   MIN_PHOTO_SEC,
   MUSIC_VOLUME,
   TITLE_CARD_SEC,
+  activeWordIndex,
   containedBox,
   cueAtFrame,
+  displayText,
+  easeInOutCubic,
   endCardFrom,
   fadeInOpacity,
   kenBurns,
@@ -15,6 +18,7 @@ import {
   musicVolume,
   photoFit,
   photoSchedule,
+  pushOffset,
   screenTexts,
   secToFrames,
   type Slot,
@@ -333,5 +337,73 @@ describe('screenTexts', () => {
   it('leaves out blank texts', () => {
     const texts = screenTexts({ ...base, overlays: { title: 'Maison', subtitle: ' ', price: '', contact: '  ' } });
     expect(texts).toEqual({ title: 'Maison' });
+  });
+});
+
+describe('easeInOutCubic', () => {
+  it('goes from 0 to 1 through 0.5, symmetric, clamped', () => {
+    expect(easeInOutCubic(0)).toBe(0);
+    expect(easeInOutCubic(0.5)).toBe(0.5);
+    expect(easeInOutCubic(1)).toBe(1);
+    expect(easeInOutCubic(0.25) + easeInOutCubic(0.75)).toBeCloseTo(1, 10);
+    expect(easeInOutCubic(-1)).toBe(0);
+    expect(easeInOutCubic(2)).toBe(1);
+  });
+});
+
+describe('pushOffset', () => {
+  const T = 15;
+
+  it('brings an entering photo in from the right and sends an exiting one out to the left', () => {
+    expect(pushOffset(0, 60, T, { enters: true, exits: true })).toBe(1);
+    expect(pushOffset(T, 60, T, { enters: true, exits: true })).toBe(0);
+    expect(pushOffset(30, 60, T, { enters: true, exits: true })).toBe(0);
+    expect(pushOffset(59, 60, T, { enters: true, exits: true })).toBeLessThan(-0.95);
+  });
+
+  it('keeps the first photo in place at the start and the last one at the end', () => {
+    expect(pushOffset(0, 60, T, { enters: false, exits: true })).toBe(0);
+    expect(pushOffset(59, 60, T, { enters: true, exits: false })).toBe(0);
+    expect(pushOffset(10, 60, 0, { enters: true, exits: true })).toBe(0);
+  });
+
+  it('keeps two consecutive photos side by side during the push, with photoSchedule', () => {
+    const slots = photoSchedule(4, 300, FPS);
+    for (const [i, slot] of slots.entries()) {
+      const next = slots[i + 1];
+      if (!next) continue;
+      for (let f = next.from; f < slot.from + slot.durationInFrames; f++) {
+        const out = pushOffset(f - slot.from, slot.durationInFrames, OVERLAP, { enters: i > 0, exits: true });
+        const inc = pushOffset(f - next.from, next.durationInFrames, OVERLAP, { enters: true, exits: i + 1 < slots.length - 1 });
+        expect(inc - out).toBeCloseTo(1, 10);
+      }
+    }
+  });
+});
+
+describe('activeWordIndex', () => {
+  const words = [
+    { word: 'Audi', start: 0, end: 0.4 },
+    { word: 'Q2', start: 0.4, end: 0.8 },
+    { word: 'de', start: 1, end: 1.2 },
+  ];
+
+  it('is the last word started, even during a pause', () => {
+    expect(activeWordIndex(words, 0)).toBe(0);
+    expect(activeWordIndex(words, 0.5)).toBe(1);
+    expect(activeWordIndex(words, 0.9)).toBe(1);
+    expect(activeWordIndex(words, 5)).toBe(2);
+  });
+
+  it('is -1 before the first word', () => {
+    expect(activeWordIndex(words, -0.1)).toBe(-1);
+    expect(activeWordIndex([], 1)).toBe(-1);
+  });
+});
+
+describe('displayText', () => {
+  it('widens the narrow no-break space of French numbers, and keeps them unbreakable', () => {
+    expect(displayText('23\u202F990\u00A0€')).toBe('23\u00A0990\u00A0€');
+    expect(displayText('Audi Q2')).toBe('Audi Q2');
   });
 });

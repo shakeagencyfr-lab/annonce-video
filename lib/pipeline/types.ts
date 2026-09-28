@@ -87,8 +87,11 @@ export type Voiceover = {
   characters: number;
 };
 
-/** A subtitle line shown from start to end (seconds), built from word timings. */
-export type SubtitleCue = { text: string; start: number; end: number };
+/**
+ * A subtitle line shown from start to end (seconds), built from word timings. `words`
+ * times each word inside the cue, for the word-by-word highlight.
+ */
+export type SubtitleCue = { text: string; start: number; end: number; words?: WordTiming[] };
 
 /** Cost line of one step (CLAUDE.md, table video_costs). */
 export type UsageLine = {

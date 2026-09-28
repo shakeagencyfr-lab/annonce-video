@@ -81,7 +81,7 @@ export function buildCues(words: readonly WordTiming[], format: Format, opts: Cu
   }
   if (line.length > 0) lines.push(line);
 
-  const spans = lines.map((l) => ({ text: lineText(l).trim(), start: l[0]?.start ?? 0, end: l.at(-1)?.end ?? 0 }));
+  const spans = lines.map((l) => ({ words: l, text: lineText(l).trim(), start: l[0]?.start ?? 0, end: l.at(-1)?.end ?? 0 }));
   const cues: SubtitleCue[] = [];
   for (const [i, span] of spans.entries()) {
     const start = Math.max(span.start, cues.at(-1)?.end ?? 0);
@@ -91,7 +91,10 @@ export function buildCues(words: readonly WordTiming[], format: Format, opts: Cu
       if (next.start < end) end = Math.max(next.start, start);
       else if (next.start - end < gapSec) end = Math.max(end, Math.min(next.start, start + maxSec));
     }
-    cues.push({ text: span.text, start, end });
+    // Word times kept inside the cue, in order, for the highlight of the spoken word.
+    const within = (t: number) => Math.min(end, Math.max(start, t));
+    const timed = span.words.map((w) => ({ word: w.word, start: within(w.start), end: within(w.end) }));
+    cues.push({ text: span.text, start, end, words: timed });
   }
   return cues;
 }

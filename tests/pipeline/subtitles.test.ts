@@ -78,11 +78,30 @@ describe('buildCues', () => {
       { word: 'Diesel.', start: 1.1, end: 1.6 },
       { word: 'Garantie.', start: 2.4, end: 3 },
     ];
-    expect(buildCues(words, '9x16')).toEqual([
+    expect(buildCues(words, '9x16').map(({ text, start, end }) => ({ text, start, end }))).toEqual([
       { text: 'Peugeot 308.', start: 0.1, end: 1.1 },
       { text: 'Diesel.', start: 1.1, end: 1.6 },
       { text: 'Garantie.', start: 2.4, end: 3 },
     ]);
+  });
+
+  it('keeps the timing of each word inside its cue, for the highlight', () => {
+    const words: WordTiming[] = [
+      { word: 'Première', start: 0, end: 0.6 },
+      { word: 'main.', start: 0.5, end: 1.2 },
+      { word: 'Carnet', start: 1, end: 1.5 },
+      { word: 'complet.', start: 1.4, end: 2 },
+    ];
+    const cues = buildCues(words, '9x16');
+    expect(cues.map((c) => c.words?.map((w) => w.word))).toEqual([['Première', 'main.'], ['Carnet', 'complet.']]);
+    for (const cue of cues) {
+      for (const w of cue.words ?? []) {
+        expect(w.start).toBeGreaterThanOrEqual(cue.start);
+        expect(w.end).toBeLessThanOrEqual(cue.end);
+      }
+    }
+    // The second cue starts when the first ends: its first word is moved to that time.
+    expect(cues[1]?.words?.[0]?.start).toBe(cues[1]?.start);
   });
 
   it('never overlaps, even on overlapping word timings', () => {
