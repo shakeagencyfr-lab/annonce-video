@@ -25,9 +25,13 @@ Dans `out/<plateforme>-<id>-<date>/` (dossier ignoré par git) :
 
 - **Aucune invention (règle 3).** Le script est écrit par Claude Sonnet 5 à partir de la seule
   fiche, puis contrôlé de deux façons : un contrôle déterministe (chaque nombre dit ou affiché
-  doit figurer dans la fiche, pas de prix ni de téléphone dans la version annonce, lexique
+  doit figurer dans la fiche avec la même unité, une durée de garantie doit être celle de la
+  garantie incluse et jamais celle d'une extension payante, chaque équipement cité doit être
+  celui que dit la phrase, pas de prix ni de téléphone dans la version annonce, lexique
   d'affirmations qui exigent une preuve dans la fiche : « état impeccable », « première
-  main », « entretien suivi »…) et une relecture par Claude Haiku. En cas de problème, une
+  main », « toit ouvrant », « financement inclus »…) et une relecture par Claude Haiku. Les
+  offres commerciales du vendeur (financement, extension de garantie, vente HT à l'export)
+  ne sont jamais présentées comme des qualités du véhicule. En cas de problème, une
   seule réécriture avec la liste des problèmes ; s'il en reste, **la vidéo n'est pas faite**
   et la commande affiche ce qui ne va pas.
 - **Photos.** Téléchargées une à une depuis les serveurs d'images (autorisés, étape 0 bis),
@@ -50,7 +54,7 @@ fait sur ta machine.
    ```bash
    git clone https://github.com/shakeagencyfr-lab/annonce-video.git
    cd annonce-video
-   git checkout claude/new-session-t965yn
+   git checkout claude/new-session-ednxql
    npm install
    ```
 
@@ -78,9 +82,10 @@ fait sur ta machine.
 **Critère de fin** : deux MP4 lisibles, sous-titres calés sur la voix, aucune information
 inventée. Pour le vérifier, comparer `scripts.json` à `fiche.json` et regarder les vidéos.
 
-Ordre de grandeur attendu : environ 0,05 $ de Claude (tri de 10 à 20 photos, script, relecture)
-et 0,25 à 0,30 $ de voix pour les deux versions, soit **environ 0,35 $ par annonce**. La
-commande affiche le coût réel, étape par étape.
+Ordre de grandeur attendu : environ 0,05 à 0,08 $ de Claude (tri de toutes les photos de
+l'annonce, jusqu'à 50, envoyées en 512 px ; script ; relecture) et environ 0,20 $ de voix pour
+les deux versions (mesuré le 28/09/2026 : 0,044 $ pour 200 caractères), soit **environ 0,30 $
+par annonce**. La commande affiche le coût réel, étape par étape.
 
 ## Lancer le test dans une session Claude Code cloud (sans rien installer)
 
@@ -105,8 +110,9 @@ Dans la session : menu du titre → **Modifier l'environnement cloud**.
   `prod.pictures.autoscout24.net` (+ `api.elevenlabs.io` si la clé passe en variable), case
   « gestionnaires de paquets » cochée.
 
-Puis ouvrir une **nouvelle** session (les réglages s'appliquent au démarrage), y joindre le
-fichier exporté et demander : `npm install`, puis `npm run make-video -- <fichier>`.
+Puis ouvrir une **nouvelle** session : une session ne voit que les réglages présents à son
+démarrage, une clé ajoutée ensuite n'y apparaît jamais. Y joindre le fichier exporté et
+demander : `npm install`, puis `npm run make-video -- <fichier>`.
 
 ## Tester sans clés
 
@@ -119,13 +125,17 @@ jusqu'au rendu, gratuitement. `npm run render-sample` rend un échantillon de 12
 
 ## Ce qui est vérifié, ce qui ne l'est pas encore
 
-- **Vérifié ici** : 307 tests (lecteurs, photos, script et contrôle anti-invention, voix,
-  sous-titres, rendu, orchestration avec des faux Claude et ElevenLabs) ; deux MP4 réels
-  rendus hors ligne (1080×1920 et 1920×1080, 30 i/s), images contrôlées une à une.
-- **Pas encore vérifié** (pas de clés ni de réseau ici) : les vrais appels Claude et
-  ElevenLabs, une vraie page AutoScout24 (structure tirée de sources publiques 2026), le
-  favori sur une vraie page Leboncoin, la qualité des photos Leboncoin en HD (la plus grande
-  variante connue fait environ 1200×800). C'est l'objet du test sur ta machine.
+- **Vérifié par les tests** : 374 tests (lecteurs, photos, script et contrôle anti-invention,
+  voix, sous-titres, sonie, rendu, orchestration avec des faux Claude et ElevenLabs).
+- **Vérifié en vrai le 28/09/2026** (session cloud, deux annonces exportées avec le favori :
+  une Audi Q2 d'un pro, 42 photos, et une maison d'agence, 16 photos, DPE D) : lecture des
+  exports, téléchargement de toutes les photos depuis `img.leboncoin.fr`, vraie voix ElevenLabs
+  avec horodatage (sous-titres contrôlés mot à mot sur les images), rendu des deux formats avec
+  le DPE sur la maison. Leboncoin ne sert pas plus grand que 800×600 : les photos sont un peu
+  douces en 16:9. Le logo « leboncoin » est incrusté dans les photos.
+- **Pas encore vérifié** : les vrais appels Claude (tri des photos, script, relecture), faute de
+  `APP_ANTHROPIC_API_KEY` dans la session ; une vraie page AutoScout24 (structure tirée de
+  sources publiques 2026) ; une annonce SeLoger.
 
 ## Licence Remotion
 
