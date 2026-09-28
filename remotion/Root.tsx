@@ -12,6 +12,10 @@ const calculateMetadata: CalculateMetadataFunction<VideoProps> = ({ props }) => 
     throw new Error(`durationInFrames invalide : ${props.durationInFrames}`);
   }
   if (!(props.fps > 0)) throw new Error(`fps invalide : ${props.fps}`);
+  // Remotion takes 1 as the recorded level and refuses 100 or more.
+  if (props.voiceVolume !== undefined && !(props.voiceVolume >= 0 && props.voiceVolume < 100)) {
+    throw new Error(`voiceVolume invalide : ${props.voiceVolume}`);
+  }
   return { durationInFrames: props.durationInFrames, fps: props.fps };
 };
 

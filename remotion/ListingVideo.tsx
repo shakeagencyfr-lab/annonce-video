@@ -43,7 +43,7 @@ export function ListingVideo(props: VideoProps) {
       ) : null}
       {dpe ? <DpeBadge dpe={dpe} /> : null}
       <Subtitles cues={props.subtitles} />
-      {props.voiceSrc ? <Html5Audio src={staticFile(props.voiceSrc)} /> : null}
+      {props.voiceSrc ? <Html5Audio src={staticFile(props.voiceSrc)} volume={props.voiceVolume ?? 1} /> : null}
       {props.musicSrc ? (
         // "extend": the volume callback gets the frame of the video, not of the current
         // loop of the music, so the fade-out happens at the end even when the music loops.

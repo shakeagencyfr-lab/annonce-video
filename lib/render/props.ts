@@ -14,6 +14,11 @@ export type VideoProps = {
   photos: { src: string; role: PhotoRole; width: number; height: number }[];
   /** Voice-over file; absent in silent test renders. */
   voiceSrc?: string;
+  /**
+   * Linear gain of the voice-over (1: as recorded; above 1 amplifies). Set by the render
+   * from the measured loudness of the file (lib/render/loudness.ts) when absent.
+   */
+  voiceVolume?: number;
   /** Background music, only from a royalty-free library with a commercial license (rule 6). */
   musicSrc?: string;
   subtitles: SubtitleCue[];
