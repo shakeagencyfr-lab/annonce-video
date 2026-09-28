@@ -57,7 +57,7 @@ fait sur ta machine.
 2. Créer `.env.local` à la racine (modèle : `.env.example`) :
 
    ```bash
-   ANTHROPIC_API_KEY=sk-ant-...
+   ANTHROPIC_API_KEY=sk-ant-...      # ou APP_ANTHROPIC_API_KEY
    ELEVENLABS_API_KEY=...
    ELEVENLABS_VOICE_ID_FR=...        # une voix française de ta bibliothèque ElevenLabs
    ELEVENLABS_USD_PER_1K_CHARS=0.22  # le prix réel de ton offre
@@ -81,6 +81,32 @@ inventée. Pour le vérifier, comparer `scripts.json` à `fiche.json` et regarde
 Ordre de grandeur attendu : environ 0,05 $ de Claude (tri de 10 à 20 photos, script, relecture)
 et 0,25 à 0,30 $ de voix pour les deux versions, soit **environ 0,35 $ par annonce**. La
 commande affiche le coût réel, étape par étape.
+
+## Lancer le test dans une session Claude Code cloud (sans rien installer)
+
+Dans la session : menu du titre → **Modifier l'environnement cloud**.
+
+- **Identifiants d'API** → **Ajouter** : site autorisé `api.elevenlabs.io`, en-tête `xi-api-key`
+  sans préfixe, valeur = la clé ElevenLabs. Le proxy de l'environnement l'ajoute aux requêtes :
+  la clé n'apparaît jamais dans la session. Laisser `ELEVENLABS_API_KEY` vide.
+- **Variables d'environnement** (visibles par qui utilise l'environnement : n'y mettre que ce
+  qui ne peut pas passer par un identifiant d'API) :
+
+  ```
+  APP_ANTHROPIC_API_KEY=...   # api.anthropic.com ne reçoit jamais d'identifiant d'API ;
+                              # ANTHROPIC_API_KEY est réservé à Claude Code
+  ELEVENLABS_VOICE_ID_FR=...
+  ELEVENLABS_USD_PER_1K_CHARS=0.22
+  REMOTION_BROWSER_EXECUTABLE=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell
+  ```
+
+  Pour limiter le risque, fixer une limite de dépenses mensuelle sur la clé Anthropic (console).
+- **Accès réseau** : Custom, domaines `img.leboncoin.fr`, `www.autoscout24.fr`,
+  `prod.pictures.autoscout24.net` (+ `api.elevenlabs.io` si la clé passe en variable), case
+  « gestionnaires de paquets » cochée.
+
+Puis ouvrir une **nouvelle** session (les réglages s'appliquent au démarrage), y joindre le
+fichier exporté et demander : `npm install`, puis `npm run make-video -- <fichier>`.
 
 ## Tester sans clés
 

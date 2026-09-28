@@ -27,6 +27,16 @@ export const ELEVENLABS_DEFAULT_USD_PER_1K_CHARS = 0.22;
 /** Model with character-level timestamps and French support. */
 export const ELEVENLABS_MODEL = 'eleven_multilingual_v2';
 
+/**
+ * Claude key of the app. APP_ANTHROPIC_API_KEY first: in Claude Code cloud sessions
+ * ANTHROPIC_API_KEY is reserved for Claude Code itself; locally either name works.
+ */
+export function anthropicApiKey(): string {
+  const value = process.env.APP_ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim();
+  if (!value) throw new Error("Clé Claude manquante : APP_ANTHROPIC_API_KEY (ou ANTHROPIC_API_KEY en local), voir .env.example");
+  return value;
+}
+
 export function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`Variable d'environnement manquante : ${name} (voir .env.example)`);

@@ -171,7 +171,12 @@ const ErrorBodySchema = z.object({
 });
 
 export type SynthesizeDeps = {
-  apiKey: string;
+  /**
+   * Absent when the cloud environment's proxy adds the key itself (an "API credential"
+   * on api.elevenlabs.io with the xi-api-key header): the key then never enters the
+   * session. Locally, ELEVENLABS_API_KEY.
+   */
+  apiKey?: string;
   voiceId: string;
   /** Folder of the render's public files: the audio is written there as voice-{variant}.mp3. */
   outDir: string;
@@ -206,7 +211,9 @@ function httpError(status: number, body: unknown, retried: boolean): string {
     return `quota ElevenLabs épuisé : recharger les crédits ou changer de formule${suffix}`;
   }
   // A 401 also covers a key without the text-to-speech permission: keep the API detail.
-  if (status === 401) return `clé ElevenLabs invalide (vérifier ELEVENLABS_API_KEY)${suffix}`;
+  if (status === 401) {
+    return `clé ElevenLabs refusée (vérifier ELEVENLABS_API_KEY, ou l'identifiant d'API de l'environnement)${suffix}`;
+  }
   if (detail.status === 'voice_not_found') {
     return `voix ElevenLabs introuvable (vérifier ELEVENLABS_VOICE_ID_FR)${suffix}`;
   }
@@ -261,7 +268,11 @@ async function requestTimestamps(
     try {
       res = await doFetch(url, {
         method: 'POST',
-        headers: { 'xi-api-key': deps.apiKey, 'content-type': 'application/json', accept: 'application/json' },
+        headers: {
+          ...(deps.apiKey ? { 'xi-api-key': deps.apiKey } : {}),
+          'content-type': 'application/json',
+          accept: 'application/json',
+        },
         body,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
@@ -305,17 +316,16 @@ export async function synthesize(
 ): Promise<{ voiceover: Voiceover; usage: UsageLine }> {
   const model = deps.model ?? ELEVENLABS_MODEL;
   const text = voiceText(script);
-  const apiKey = deps.apiKey.trim();
+  const apiKey = deps.apiKey?.trim() ?? '';
   const voiceId = deps.voiceId.trim();
   if (!text) throw new Error('script vide : rien à lire');
   if (!voiceId) throw new Error('voix ElevenLabs manquante (ELEVENLABS_VOICE_ID_FR)');
-  if (!apiKey) throw new Error('clé ElevenLabs manquante (ELEVENLABS_API_KEY)');
   // Before the paid call, so a bad price setting fails without spending characters.
   const usage = ttsUsageLine(text.length, model);
 
   let response: z.infer<typeof TimestampsResponseSchema>;
   try {
-    response = await requestTimestamps(text, script.language, { ...deps, apiKey, voiceId, model });
+    response = await requestTimestamps(text, script.language, { ...deps, apiKey: apiKey || undefined, voiceId, model });
   } catch (err) {
     throw new Error(redact(err instanceof Error ? err.message : String(err), apiKey));
   }

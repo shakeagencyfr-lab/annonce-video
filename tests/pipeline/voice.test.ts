@@ -224,7 +224,9 @@ describe('synthesize', () => {
       json({ detail: { status: 'invalid_api_key', message: `Invalid API key: ${API_KEY}` } }, 401),
     );
     const err = await errorOf(synthesize(script, deps(fetch)));
-    expect(err.message).toBe('clé ElevenLabs invalide (vérifier ELEVENLABS_API_KEY) : Invalid API key: ***');
+    expect(err.message).toBe(
+      "clé ElevenLabs refusée (vérifier ELEVENLABS_API_KEY, ou l'identifiant d'API de l'environnement) : Invalid API key: ***",
+    );
     expect(fetch).toHaveBeenCalledOnce();
   });
 
@@ -232,7 +234,7 @@ describe('synthesize', () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       json({ detail: { status: 'missing_permissions', message: 'The API key is missing the permission text_to_speech.' } }, 401),
     );
-    expect((await errorOf(synthesize(script, deps(fetch)))).message).toMatch(/invalide.*missing the permission text_to_speech/);
+    expect((await errorOf(synthesize(script, deps(fetch)))).message).toMatch(/refusée.*missing the permission text_to_speech/);
   });
 
   it('names the voice setting when the voice does not exist', async () => {
@@ -321,11 +323,20 @@ describe('synthesize', () => {
     expect(err.message).not.toContain(API_KEY);
   });
 
+  it('sends no key header when the environment proxy provides the key', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+      throw new Error('stop');
+    });
+    await errorOf(synthesize(script, deps(fetch, { apiKey: undefined, retryDelayMs: 0 })));
+    const headers = fetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(headers).not.toHaveProperty('xi-api-key');
+    expect(headers['content-type']).toBe('application/json');
+  });
+
   it('refuses an empty script or missing settings before any request', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>();
     const empty = { ...script, segments: [{ kind: 'hook' as const, text: '  ', facts: [] }] };
     expect((await errorOf(synthesize(empty, deps(fetch)))).message).toMatch(/script vide/);
-    expect((await errorOf(synthesize(script, deps(fetch, { apiKey: '' })))).message).toMatch(/clé ElevenLabs manquante/);
     expect((await errorOf(synthesize(script, deps(fetch, { voiceId: ' ' })))).message).toMatch(/voix ElevenLabs manquante/);
     expect(fetch).not.toHaveBeenCalled();
   });

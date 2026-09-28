@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
-import { ELEVENLABS_MODEL, MODELS, requireEnv } from '../config';
+import { anthropicApiKey, ELEVENLABS_MODEL, MODELS, requireEnv } from '../config';
 import { summarizeCosts, type CostSummary } from '../costs';
 import { readSource } from '../readers';
 import { renderVideos } from '../render/local';
@@ -138,7 +138,7 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
   }
   if (photos.length === 0) throw new Error('Aucune photo utilisable : impossible de faire une vidéo');
 
-  const client: ClaudeClient | null = options.offline ? null : (deps.client ?? new Anthropic());
+  const client: ClaudeClient | null = options.offline ? null : (deps.client ?? new Anthropic({ apiKey: anthropicApiKey() }));
   let selection: PhotoSelection;
   if (client) {
     const result = await selectPhotos(photos, sheet, { client, model: MODELS.photos });
@@ -176,7 +176,8 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
     }
     const voiceIdVar = `ELEVENLABS_VOICE_ID_${options.language.toUpperCase()}`;
     const result = await tts(scripts[v], {
-      apiKey: requireEnv('ELEVENLABS_API_KEY'),
+      // Absent in a cloud environment whose proxy adds the key (API credential).
+      apiKey: process.env.ELEVENLABS_API_KEY?.trim() || undefined,
       voiceId: requireEnv(voiceIdVar),
       outDir: publicDir,
       model: ELEVENLABS_MODEL,
