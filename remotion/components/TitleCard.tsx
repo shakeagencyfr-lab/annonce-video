@@ -30,46 +30,54 @@ export function TitleCard({
         style={{
           position: 'absolute',
           left: layout.sideMargin,
-          right: layout.vertical ? layout.textRight : layout.width * 0.4,
+          // 9:16: the title sits above the action column of the networks, so it keeps the
+          // side margin (layout.textRight is for the subtitles and the end card).
+          right: layout.vertical ? layout.sideMargin : layout.width * 0.4,
           ...layout.title,
+          display: 'flex',
+          flexDirection: 'column',
           transform: `translateY(${rise}px)`,
         }}
       >
-        <div
-          style={{
-            width: 110 * bar,
-            height: 10,
-            borderRadius: 5,
-            backgroundColor: COLORS.accent,
-            marginBottom: 28,
-          }}
-        />
-        <div
-          style={{
-            fontSize: fitFontSize(title, layout.fontSize.title, layout.vertical ? 36 : 40),
-            fontWeight: 800,
-            lineHeight: 1.06,
-            letterSpacing: '-0.02em',
-            textShadow: '0 4px 24px rgba(0,0,0,0.45)',
-          }}
-        >
-          {title}
-        </div>
-        {subtitle ? (
+        {/* Takes the free height of the band (9:16), so the block stands on its bottom. */}
+        <div style={{ flexGrow: 1 }} />
+        <div style={{ flexShrink: 0 }}>
           <div
             style={{
-              marginTop: 18,
-              fontSize: fitFontSize(subtitle, layout.fontSize.subtitle, 44),
-              fontWeight: 400,
-              lineHeight: 1.25,
-              color: COLORS.muted,
-              opacity: subtitleIn,
-              textShadow: '0 2px 16px rgba(0,0,0,0.5)',
+              width: 110 * bar,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: COLORS.accent,
+              marginBottom: 28,
+            }}
+          />
+          <div
+            style={{
+              fontSize: fitFontSize(title, layout.fontSize.title, layout.vertical ? 36 : 40),
+              fontWeight: 800,
+              lineHeight: 1.06,
+              letterSpacing: '-0.02em',
+              textShadow: '0 4px 24px rgba(0,0,0,0.45)',
             }}
           >
-            <SeparatedText text={subtitle} />
+            {title}
           </div>
-        ) : null}
+          {subtitle ? (
+            <div
+              style={{
+                marginTop: 18,
+                fontSize: fitFontSize(subtitle, layout.fontSize.subtitle, 44),
+                fontWeight: 400,
+                lineHeight: 1.25,
+                color: COLORS.muted,
+                opacity: subtitleIn,
+                textShadow: '0 2px 16px rgba(0,0,0,0.5)',
+              }}
+            >
+              <SeparatedText text={subtitle} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </AbsoluteFill>
   );

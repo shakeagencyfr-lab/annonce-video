@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { cancelRender, continueRender, delayRender, useVideoConfig } from 'remotion';
 import { textWidthEm } from '../../lib/pipeline/subtitles';
+import { containedBox } from '../../lib/render/timeline';
 
 /** Shared look of the listing videos: font, colors, safe areas per orientation. */
 
@@ -22,19 +23,21 @@ export type Layout = {
   /** Side margin kept free of text. */
   sideMargin: number;
   /**
-   * Right edge of the text blocks (title, subtitles, end card), from the right. In
-   * 9:16 it keeps text clear of the action column of TikTok, Reels and Shorts (like,
-   * comment, share); in 16:9 it is the side margin.
+   * Right edge of the subtitles and of the end card block, from the right. In 9:16 it
+   * keeps text clear of the action column of TikTok, Reels and Shorts (like, comment,
+   * share, from mid-height down); in 16:9 it is the side margin. The title card, above
+   * that column, keeps the side margin.
    */
   textRight: number;
   /** Top of the corner badges, below the app bars of TikTok, Reels and Shorts in 9:16. */
   badgeTop: number;
   /**
-   * Title block anchor. 9:16 hangs it from its top, below the corner badges, so a long
-   * title grows toward the photo instead of under the DPE badge; 16:9 stands it on its
-   * bottom edge, left of the badges.
+   * Title block position. 9:16 gives it a band between the corner badges and the top of
+   * a 4:3 photo, and stands it on the bottom of the band so that it stays clear of the
+   * photo; a block taller than the band hangs from its top instead and grows toward the
+   * photo, not under the DPE badge. 16:9 stands it on its bottom edge, left of the badges.
    */
-  title: { top: number } | { bottom: number };
+  title: { top: number; bottom: number } | { bottom: number };
   /** Vertical center of the subtitle line, from the top. */
   subtitleCenter: number;
   /** Vertical center of the end card block, from the top. */
@@ -45,15 +48,16 @@ export type Layout = {
 /**
  * 9:16 keeps text between the app bars (top ~10 %, bottom ~20 %) and left of the
  * action column (right ~13 %, from mid-height down). A landscape photo spans the
- * width around the middle (y 555 to 1365 for 4:3, Photos.tsx); the subtitles sit just
- * below it, above the bottom bar, and the end card block above them. 16:9 puts the
- * subtitles near the bottom, as on YouTube.
+ * width around the middle (y 555 to 1365 for 4:3, Photos.tsx); the title card stands
+ * just above it, the subtitles sit just below it, above the bottom bar, and the end
+ * card block above them. 16:9 puts the subtitles near the bottom, as on YouTube.
  */
 export function useLayout(): Layout {
   const { width, height } = useVideoConfig();
   const vertical = height > width;
   if (vertical) {
     const badgeTop = Math.round(height * 0.1);
+    const photoTop = containedBox({ width: 4, height: 3 }, { width, height }).top;
     return {
       vertical,
       width,
@@ -61,8 +65,11 @@ export function useLayout(): Layout {
       sideMargin: Math.round(width * 0.06),
       textRight: Math.round(width * 0.13),
       badgeTop,
-      // Below the badge row (DPE and price badges are under 100 px high).
-      title: { top: badgeTop + Math.round(height * 0.065) },
+      // The title text starts below the badge row (DPE and price badges are under 100 px
+      // high); above it, the accent bar and its margin take 38 px on the left, where the
+      // price badge only appears after the title card. The block ends 20 px above a 4:3
+      // photo.
+      title: { top: badgeTop + 100 - 38, bottom: height - Math.round(photoTop - 20) },
       subtitleCenter: Math.round(height * 0.745),
       endCardCenter: Math.round(height * 0.42),
       fontSize: { title: 78, subtitle: 42, subtitles: 56, price: 88, contact: 44 },
