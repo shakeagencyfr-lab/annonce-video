@@ -1,10 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
+import { describeProblem } from '@/lib/pipeline/factcheck';
 import { countWords, produceCheckedScripts, ScriptCheckError, ScriptError, writeScripts } from '@/lib/pipeline/script';
 import type { PhotoRole, PhotoSelection, SelectedPhoto } from '@/lib/pipeline/types';
-import { SCRIPT_PROMPT_VERSION, spokenWordTarget } from '@/lib/prompts/script.v1';
+import { SCRIPT_PROMPT_VERSION, scriptSystemPrompt, spokenWordTarget } from '@/lib/prompts/script.v2';
 import { parseSheet } from '@/lib/sheet';
-import { type Answer, auto, cleanAnswer, fakeClaude, type ParseParams, recordingFetch, toScripts } from './script-helpers';
+import { type Answer, auto, cleanAnswer, dealer, dealerAnswer, fakeClaude, type ParseParams, recordingFetch, toScripts } from './script-helpers';
 
 const SONNET = 'claude-sonnet-5';
 const HAIKU = 'claude-haiku-4-5-20251001';
@@ -68,7 +69,7 @@ describe('writeScripts', () => {
       expect(params.system).toContain(invented);
     }
     expect(params.system).toContain('en français');
-    expect(params.system).toContain('75 à 100 mots (30 à 40 secondes à environ 2,5 mots par seconde)');
+    expect(params.system).toContain('60 à 80 mots (30 à 40 secondes à environ 2 mots par seconde)');
     expect(params.system).toContain('8 mots au plus');
     expect(params.system).toContain('« 68 000 km »');
     expect(params.system).toContain('« 308 de 130 ch », pas « 308 130 ch »');
@@ -85,7 +86,35 @@ describe('writeScripts', () => {
     expect(prompt).not.toContain('img.leboncoin.fr');
     expect(prompt).not.toContain('123456789');
     expect(prompt).toContain('1. trois-quarts avant ; 2. profil ; 3. arrière ; 4. intérieur');
-    expect(SCRIPT_PROMPT_VERSION).toBe('script.v1');
+    expect(SCRIPT_PROMPT_VERSION).toBe('script.v2');
+  });
+
+  it('tells Sonnet the seller’s offers are not the car’s, and which equipment makes a strong point', async () => {
+    const { client, calls } = fakeClaude({ [SONNET]: [{ json: dealerAnswer() }] });
+    const { scripts } = await writeScripts(dealer, selection, { client, language: 'fr' });
+    expect(scripts).toEqual(toScripts(dealerAnswer()));
+
+    const system = String(calls[0]?.system);
+    expect(system).toContain(
+      'Les offres commerciales du vendeur (financement, extension de garantie, vente HT à l’export, livraison, reprise, préparation) ne sont pas des caractéristiques du véhicule : ne les présente jamais comme incluses ou offertes.',
+    );
+    expect(system).toContain('jamais la durée maximale d’une extension de garantie ni celle d’un financement');
+    expect(system).toContain('la garantie incluse si la fiche en indique une');
+    expect(system).toContain('pas parmi les équipements de base ou obligatoires (ABS, airbags, appel d’urgence, compte-tours)');
+    expect(system).toContain('Un nom d’équipement ne dit rien d’une qualité');
+    expect(system).toContain('Si une information ne figure que dans la description, cite « description ».');
+    expect(system).toContain('(« equipment[3] ») est celui que le segment énonce, avec au moins un de ses mots.');
+    expect(system).toContain('sans « HT » ni « TTC »');
+    // The boilerplate reaches Sonnet as it is: the prompt says how to read it.
+    expect(String(calls[0]?.messages[0]?.content)).toContain('Extension de garantie de 12 à 60 mois en option');
+
+    // A property has neither the car's offers nor its equipment; another language, no word to share with the sheet.
+    const immo = scriptSystemPrompt({ vertical: 'immo', language: 'fr' });
+    expect(immo).not.toContain('offres commerciales');
+    expect(immo).not.toContain('Un nom d’équipement');
+    expect(immo).not.toContain('équipements de base');
+    expect(immo).toContain('(« features[3] »)');
+    expect(scriptSystemPrompt({ vertical: 'auto', language: 'de' })).toContain('est celui que le segment énonce. Un atout');
   });
 
   it('takes the language and the vertical as parameters', async () => {
@@ -94,8 +123,8 @@ describe('writeScripts', () => {
     expect(scripts.social.language).toBe('de');
     expect(calls[0]?.system).toContain('écris tous les textes (voix off et écran) en allemand');
     expect(String(calls[0]?.messages[0]?.content)).toContain('en allemand.');
-    expect(spokenWordTarget('auto', 'fr')).toEqual({ min: 75, max: 100 });
-    expect(spokenWordTarget('immo', 'fr')).toEqual({ min: 113, max: 150 });
+    expect(spokenWordTarget('auto', 'fr')).toEqual({ min: 60, max: 80 });
+    expect(spokenWordTarget('immo', 'fr')).toEqual({ min: 90, max: 120 });
   });
 
   it('trims texts and drops blank overlays', async () => {
@@ -160,7 +189,7 @@ describe('writeScripts', () => {
     expect(scripts.listing.segments).toHaveLength(3);
     const retry = String(calls[1]?.messages[2]?.content);
     expect(retry).toContain('listing : accroche de 12 mots, 8 au plus');
-    expect(retry).toMatch(/listing : voix off de \d+ mots, vise 75 à 100 mots/);
+    expect(retry).toMatch(/listing : voix off de \d+ mots, vise 60 à 80 mots/);
     expect(countWords('Elle affiche 68 000 km, 68\u202f000 km.')).toBe(6);
   });
 
@@ -251,7 +280,8 @@ describe('produceCheckedScripts', () => {
   });
 
   it('retries on the judge’s findings too', async () => {
-    const colour = answerWith((a) => setText(a, 'social', 3, 'Elle est rouge, avec des jantes alliage 17 pouces.'));
+    // The segment still says both items it cites (equipment[3] and [4]): only the judge finds the colour.
+    const colour = answerWith((a) => setText(a, 'social', 3, 'Elle est rouge, avec des jantes alliage 17 pouces et la climatisation bizone.'));
     const finding = { variant: 'social', text: 'Elle est rouge', claim: 'couleur rouge', reason: 'la fiche ne donne pas la couleur' };
     const { client, calls } = fakeClaude({
       [SONNET]: [{ json: colour }, { json: cleanAnswer() }],
@@ -286,6 +316,27 @@ describe('produceCheckedScripts', () => {
     expect(failure.problems.map((p) => p.kind)).toEqual(['claim']);
     expect(failure.usage).toHaveLength(4);
     expect(calls).toHaveLength(4);
+  });
+
+  it('sends back a dealer’s offers said as the car’s, and keeps the corrected draft', async () => {
+    const offers = dealerAnswer();
+    setText(offers, 'social', 5, 'Garantie jusqu’à 60 mois, extension de garantie offerte.');
+    setText(offers, 'listing', 5, 'Garantie 5 ans, livraison partout en France.');
+    const { client, calls } = fakeClaude({
+      [SONNET]: [{ json: offers }, { json: dealerAnswer() }],
+      [HAIKU]: [NO_FINDING, NO_FINDING],
+    });
+    const result = await produceCheckedScripts(dealer, selection, { client, language: 'fr' });
+
+    expect(result.scripts).toEqual(toScripts(dealerAnswer()));
+    expect(result.problems.map(describeProblem)).toEqual([
+      '[social] segments[5].text : « offerte » (offert) : la fiche ne le dit pas',
+      '[social] segments[5].text : « 60 mois » : la garantie incluse selon la fiche est de 12 mois',
+      '[listing] segments[5].text : « livraison partout » (livraison) : la fiche ne le dit pas',
+      '[listing] segments[5].text : « 5 ans » : la garantie incluse selon la fiche est de 12 mois',
+    ]);
+    expect(calls.map((c) => c.model)).toEqual([SONNET, HAIKU, SONNET, HAIKU]);
+    expect(calls[2]?.messages[2]?.content).toContain('- [social] segments[5].text : « 60 mois » : la garantie incluse selon la fiche est de 12 mois');
   });
 
   it('checks the listing variant for prices and phones before accepting', async () => {

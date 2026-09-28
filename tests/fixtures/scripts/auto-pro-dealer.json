@@ -1,0 +1,59 @@
+{
+  "social": {
+    "segments": [
+      { "kind": "hook", "facts": ["make", "model", "version", "year"], "text": "Volkswagen T-Roc Style de 2022." },
+      {
+        "kind": "point",
+        "facts": ["mileageKm", "fuel", "powerHp", "gearbox"],
+        "text": "43 500 kilomètres, un moteur essence de 150 chevaux et une boîte automatique."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[32]", "equipment[16]", "equipment[27]"],
+        "text": "À bord : sièges avant chauffants, régulateur de vitesse adaptatif et climatisation automatique bizone."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[43]", "equipment[41]", "equipment[20]"],
+        "text": "Elle a aussi le cockpit numérique, le freinage d’urgence automatique et des jantes alliage 17 pouces."
+      },
+      { "kind": "point", "facts": ["description"], "text": "Première main, kilométrage garanti." },
+      { "kind": "point", "facts": ["description"], "text": "Elle est vendue avec une garantie de 12 mois." },
+      { "kind": "point", "facts": ["price"], "text": "Son prix : 22 490 euros." },
+      { "kind": "cta", "facts": ["sellerName", "city"], "text": "Contactez Garage Horizon Automobiles, à Villefranche-sur-Saône." }
+    ],
+    "overlays": {
+      "title": "Volkswagen T-Roc",
+      "subtitle": "2022 · 43 500 km · Essence",
+      "price": "22 490 €",
+      "contact": "Garage Horizon Automobiles · Villefranche-sur-Saône"
+    }
+  },
+  "listing": {
+    "segments": [
+      { "kind": "hook", "facts": ["make", "model", "version", "year"], "text": "Volkswagen T-Roc Style de 2022." },
+      {
+        "kind": "point",
+        "facts": ["mileageKm", "fuel", "powerHp", "gearbox"],
+        "text": "43 500 kilomètres, un moteur essence de 150 chevaux et une boîte automatique."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[32]", "equipment[16]", "equipment[27]"],
+        "text": "À bord : sièges avant chauffants, régulateur de vitesse adaptatif et climatisation automatique bizone."
+      },
+      {
+        "kind": "point",
+        "facts": ["equipment[43]", "equipment[41]", "equipment[20]"],
+        "text": "Elle a aussi le cockpit numérique, le freinage d’urgence automatique et des jantes alliage 17 pouces."
+      },
+      { "kind": "point", "facts": ["description"], "text": "Première main, kilométrage garanti." },
+      { "kind": "point", "facts": ["description"], "text": "Elle est vendue avec une garantie de 12 mois." },
+      { "kind": "cta", "facts": [], "text": "Tous les détails sont dans l’annonce." }
+    ],
+    "overlays": {
+      "title": "Volkswagen T-Roc",
+      "subtitle": "2022 · 43 500 km · Essence"
+    }
+  }
+}

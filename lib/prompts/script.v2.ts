@@ -2,7 +2,7 @@ import { DURATION_SEC, type Language, type PhotoRole } from '../pipeline/types';
 import type { Sheet } from '../sheet';
 
 /** Stored with each script so a result can be traced back to its prompt. */
-export const SCRIPT_PROMPT_VERSION = 'script.v1';
+export const SCRIPT_PROMPT_VERSION = 'script.v2';
 
 type Vertical = Sheet['vertical'];
 
@@ -15,10 +15,13 @@ export const LANGUAGE_NAMES: Record<Language, string> = {
 };
 
 /**
- * Voice-over pace in words per second. French reads at about 2.5; the other values
- * are placeholders to measure with each language's voice before enabling it.
+ * Voice-over pace in words per second (words as countWords counts them). French was
+ * measured with the configured ElevenLabs voice (eleven_multilingual_v2) on the offline
+ * template's short sentences, numbers read in full: 27 words in 15.5 s and 33 words in
+ * 17.6 s, about 1.8 words per second, used here as 2.0. The other values are
+ * placeholders to measure with each language's voice before enabling it.
  */
-export const WORDS_PER_SECOND: Record<Language, number> = { fr: 2.5, de: 2.5, it: 2.5, nl: 2.5 };
+export const WORDS_PER_SECOND: Record<Language, number> = { fr: 2.0, de: 2.5, it: 2.5, nl: 2.5 };
 
 /** The hook must be read in about 2 seconds. */
 export const HOOK_MAX_WORDS = 8;
@@ -36,8 +39,27 @@ const SUBJECT: Record<Vertical, string> = {
 };
 
 const VOICE: Record<Vertical, string> = {
-  auto: 'le modèle, l’année, le kilométrage, 3 équipements forts de la fiche et la garantie si la fiche en indique une',
+  auto: 'le modèle, l’année, le kilométrage, 3 équipements forts de la fiche et la garantie incluse si la fiche en indique une',
   immo: 'le quartier ou la ville, la surface, le nombre de pièces et 3 atouts de la fiche (caractéristiques, description)',
+};
+
+/** How to pick the strong points, when the sheet gives more than 3 (a pro's list can hold 100 items). */
+const STRONG_POINTS: Record<Vertical, string> = {
+  auto: ' Prends les équipements forts parmi le confort, la technologie et les aides à la conduite qu’un acheteur remarque, pas parmi les équipements de base ou obligatoires (ABS, airbags, appel d’urgence, compte-tours).',
+  immo: '',
+};
+
+/**
+ * What a car sheet holds besides the car's facts: equipment labels, which name devices,
+ * and a dealer's boilerplate, which lists paid or optional services next to the car's
+ * facts ("extension de garantie de 12 à 60 mois", "financement de 12 à 72 mois").
+ */
+const SHEET_TRAPS: Record<Vertical, string> = {
+  auto: `
+- Un nom d’équipement ne dit rien d’une qualité : « Capteur de luminosité » ne rend pas un habitacle lumineux, « comportement dynamique » ne rend pas une conduite dynamique.
+- Les offres commerciales du vendeur (financement, extension de garantie, vente HT à l’export, livraison, reprise, préparation) ne sont pas des caractéristiques du véhicule : ne les présente jamais comme incluses ou offertes.
+- La garantie à citer est celle que la fiche donne comme incluse (par exemple « garantie 12 mois »), jamais la durée maximale d’une extension de garantie ni celle d’un financement.`,
+  immo: '',
 };
 
 const FORBIDDEN: Record<Vertical, string> = {
@@ -57,6 +79,8 @@ const SUBTITLE: Record<Vertical, string> = {
 
 const CONTACT_NAME: Record<Vertical, string> = { auto: 'sellerName', immo: 'agencyName' };
 
+const ITEM_PATH: Record<Vertical, string> = { auto: 'equipment[3]', immo: 'features[3]' };
+
 /**
  * Instructions for the script. The prompt is in French; the output language is a
  * parameter, so German, Italian and Dutch plug in without touching the templates.
@@ -75,20 +99,20 @@ Règle absolue : aucune invention.
 - La fiche est ta seule source. Chaque information dite ou affichée doit y figurer : tu peux la reformuler ou la traduire, jamais l’enrichir.
 - N’ajoute aucun équipement, aucune caractéristique, aucun état, aucun historique, aucune qualité ni aucun usage que la fiche ne mentionne pas, même s’ils semblent évidents pour ce modèle ou ce type de bien.
 - Exemples interdits, sauf si la fiche le dit : ${FORBIDDEN[vertical]}.
-- N’utilise ni tes connaissances sur la marque, le modèle, la ville ou le quartier, ni les photos : tu ne les vois pas, seul leur ordre t’est donné.
+- N’utilise ni tes connaissances sur la marque, le modèle, la ville ou le quartier, ni les photos : tu ne les vois pas, seul leur ordre t’est donné.${SHEET_TRAPS[vertical]}
 - Si une information manque (kilométrage, garantie, prix, contact…), n’en parle pas.
 
 Chaque variante :
 - segments, dans cet ordre : une accroche (kind "hook"), puis les atouts (kind "point"), puis un appel à l’action (kind "cta").
 - L’accroche se lit en 2 secondes : ${HOOK_MAX_WORDS} mots au plus.
-- La voix off présente ${VOICE[vertical]}. Choisis les 3 atouts les plus forts de la fiche ; si elle en donne moins, fais-en moins.
+- La voix off présente ${VOICE[vertical]}. Choisis les 3 atouts les plus forts de la fiche ; si elle en donne moins, fais-en moins.${STRONG_POINTS[vertical]}
 - Longueur de la voix off, tous segments compris : ${words.min} à ${words.max} mots (${duration.min} à ${duration.max} secondes à environ ${String(WORDS_PER_SECOND[language]).replace('.', ',')} mots par seconde).
 - Suis l’ordre des photos de la vidéo quand c’est naturel.
 - Écris les nombres en chiffres, comme dans la fiche, pour qu’ils soient vérifiables : « 68 000 km », « 2019 », « 130 ch », « 12 mois ». Jamais en lettres. Ne colle pas deux nombres, qui se liraient comme un seul : « 308 de 130 ch », pas « 308 130 ch ».
-- facts : pour chaque segment, les champs de la fiche qu’il utilise, en chemins JSON : « make », « mileageKm », « equipment[1] » (indices à partir de 0), « warranty », « description ». Un atout cite au moins un champ. Un appel à l’action sans information a une liste vide.
+- facts : pour chaque segment, les champs de la fiche qu’il utilise, en chemins JSON : « make », « mileageKm », « equipment[1] » (indices à partir de 0), « warranty », « description ». Si une information ne figure que dans la description, cite « description ». Un élément de liste cité (« ${ITEM_PATH[vertical]} ») est celui que le segment énonce${language === 'fr' ? ', avec au moins un de ses mots' : ''}. Un atout cite au moins un champ. Un appel à l’action sans information a une liste vide.
 
 Les deux variantes :
-- "social" (vidéo verticale pour les réseaux sociaux) : peut dire le prix et donner le contact, seulement s’ils figurent dans la fiche (champs price, ${CONTACT_NAME[vertical]}, city, phone).
+- "social" (vidéo verticale pour les réseaux sociaux) : peut dire le prix et donner le contact, seulement s’ils figurent dans la fiche (champs price, ${CONTACT_NAME[vertical]}, city, phone). Le prix est dit tel quel, sans « HT » ni « TTC » : la fiche ne le précise pas.
 - "listing" (vidéo horizontale collée dans l’annonce elle-même) : JAMAIS de prix ni de montant, ni les mots « prix » ou « euros », ni symbole de devise ; JAMAIS de numéro de téléphone. Appel à l’action neutre, par exemple « Tous les détails sont dans l’annonce. », dans la langue demandée.
 
 Textes à l’écran (overlays) :

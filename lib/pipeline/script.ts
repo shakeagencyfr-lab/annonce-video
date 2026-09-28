@@ -9,7 +9,7 @@ import {
   scriptSystemPrompt,
   scriptUserPrompt,
   spokenWordTarget,
-} from '../prompts/script.v1';
+} from '../prompts/script.v2';
 import type { Sheet } from '../sheet';
 import {
   answerText,

@@ -7,13 +7,26 @@ import { parseSheet } from '@/lib/sheet';
 
 /** Shared by the script and fact check tests. */
 
-export const auto = parseSheet(JSON.parse(readFileSync(join(__dirname, '../fixtures/sheets/auto-308.json'), 'utf8')));
+const fixture = (path: string): unknown => JSON.parse(readFileSync(join(__dirname, '../fixtures', path), 'utf8'));
+
+export const auto = parseSheet(fixture('sheets/auto-308.json'));
+
+/**
+ * A pro dealer's listing (synthetic): a long equipment list copied from the description's
+ * bullets, and the dealer's boilerplate next to the included warranty ("garantie 12
+ * mois"): "Kilométrage garanti", a paid extension of warranty from 12 to 60 months,
+ * financing from 12 to 72 months, a tax-free price for export.
+ */
+export const dealer = parseSheet(fixture('sheets/auto-pro-dealer.json'));
 
 type Draft = { segments: { kind: VideoScript['segments'][number]['kind']; facts: string[]; text: string }[]; overlays: VideoScript['overlays'] };
 export type Answer = Record<Variant, Draft>;
 
 /** A clean Claude answer for the 308 sheet: every fact comes from the sheet. */
-export const cleanAnswer = (): Answer => JSON.parse(readFileSync(join(__dirname, '../fixtures/scripts/auto-308.json'), 'utf8'));
+export const cleanAnswer = (): Answer => fixture('scripts/auto-308.json') as Answer;
+
+/** A clean Claude answer for the dealer's sheet. */
+export const dealerAnswer = (): Answer => fixture('scripts/auto-pro-dealer.json') as Answer;
 
 export function toScripts(answer: Answer, language: Language = 'fr'): Record<Variant, VideoScript> {
   return {

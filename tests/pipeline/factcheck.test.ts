@@ -10,9 +10,9 @@ import {
   verifyWithClaude,
 } from '@/lib/pipeline/factcheck';
 import type { Variant, VideoScript } from '@/lib/pipeline/types';
-import { FACTCHECK_PROMPT_VERSION } from '@/lib/prompts/factcheck.v1';
+import { FACTCHECK_PROMPT_VERSION } from '@/lib/prompts/factcheck.v2';
 import { parseSheet, type PropertySheet, type Sheet } from '@/lib/sheet';
-import { auto, cleanAnswer, cleanScripts, fakeClaude, type ParseParams, recordingFetch, toScripts } from './script-helpers';
+import { auto, cleanAnswer, cleanScripts, dealer, dealerAnswer, fakeClaude, type ParseParams, recordingFetch, toScripts } from './script-helpers';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
 
@@ -146,6 +146,19 @@ describe('checkScripts', () => {
       { variant: 'social', where: 'segments[0].text', kind: 'claim', message: '« impeccable » (état impeccable) : la fiche ne le dit pas' },
       { variant: 'social', where: 'segments[0].text', kind: 'claim', message: '« idéale » (idéal pour…) : la fiche ne le dit pas' },
       { variant: 'social', where: 'segments[0].text', kind: 'claim', message: '« famille » (usage familial) : la fiche ne le dit pas' },
+      // The new text of segments[3] no longer says the equipment it still cites.
+      {
+        variant: 'listing',
+        where: 'segments[3].facts',
+        kind: 'fact-path',
+        message: '« equipment[3] » (« Jantes alliage 17 pouces ») : le segment n’en reprend aucun mot, cite l’élément qu’il énonce',
+      },
+      {
+        variant: 'listing',
+        where: 'segments[3].facts',
+        kind: 'fact-path',
+        message: '« equipment[4] » (« Climatisation automatique bizone ») : le segment n’en reprend aucun mot, cite l’élément qu’il énonce',
+      },
       // "entretien" and "seul propriétaire" are fine: the description says "Première main, carnet d'entretien à jour".
       { variant: 'listing', where: 'segments[3].text', kind: 'claim', message: '« Faible consommation » (faible consommation) : la fiche ne le dit pas' },
       { variant: 'listing', where: 'segments[4].text', kind: 'claim', message: '« peu de kilomètres » (faible kilométrage) : la fiche ne le dit pas' },
@@ -335,7 +348,8 @@ describe('checkScripts', () => {
   });
 
   it('asks for numbers in digits, and refuses a language without rules', () => {
-    expect(checkScripts(edit((s) => setText(s, 'social', 3, 'Cinq places et soixante-huit mille km.')), auto).map((p) => p.message)).toEqual([
+    const spelled = edit((s) => setText(s, 'social', 3, 'Cinq places et soixante-huit mille km.'));
+    expect(checkScripts(spelled, auto).filter((p) => p.kind === 'number').map((p) => p.message)).toEqual([
       '« Cinq » : écris les nombres en chiffres pour qu’ils soient vérifiables',
     ]);
     expect(() => checkScripts(toScripts(cleanAnswer(), 'de'), auto)).toThrow(/Vérification des faits indisponible en « de »/);
@@ -345,6 +359,130 @@ describe('checkScripts', () => {
     const source = factSource(auto);
     for (const key of ['photos', 'sourceUrl', 'platform', 'sellerSiren']) expect(source).not.toHaveProperty(key);
     expect(source).toMatchObject({ mileageKm: 68000, sellerName: 'Garage des Tests', equipment: expect.arrayContaining(['Caméra de recul']) });
+  });
+});
+
+describe('checkScripts on a pro dealer’s listing', () => {
+  // The dealer sheet's first line gives the included warranty ("garantie 12 mois"); its
+  // boilerplate offers a paid extension from 12 to 60 months and financing from 12 to
+  // 72 months. Its texts hold the numbers 2 (keys), 3 (03/2022), 5 (doors, seats), 60 and 72.
+  const POINT = 4;
+
+  /** Problems of the social segment 4 once it says `text`, citing `facts` (the rest is clean on the dealer's sheet). */
+  function says(text: string, facts: string[] = ['description'], sheet: Sheet = dealer): string[] {
+    const scripts = toScripts(dealerAnswer());
+    scripts.social.segments[POINT] = { kind: 'point', text, facts };
+    return checkScripts(scripts, sheet)
+      .filter((p) => p.variant === 'social' && p.where.startsWith(`segments[${POINT}].`))
+      .map((p) => `${p.variant} ${p.where} ${p.message}`);
+  }
+  const at = (where: 'text' | 'facts', message: string) => `social segments[${POINT}].${where} ${message}`;
+  const notSaid = (quote: string, label: string) => at('text', `« ${quote} » (${label}) : la fiche ne le dit pas`);
+  const included12 = (quote: string) => at('text', `« ${quote} » : la garantie incluse selon la fiche est de 12 mois`);
+
+  it('passes the clean scripts', () => {
+    expect(checkScripts(toScripts(dealerAnswer()), dealer)).toEqual([]);
+  });
+
+  it('accepts what the sheet says, with the unit it gives or a conversion of it', () => {
+    const cases: [string, string[]][] = [
+      ['Garantie 12 mois.', ['description']],
+      ['Garantie 1 an.', ['description']],
+      ['Kilométrage garanti.', ['description']],
+      ['Première main.', ['description']],
+      ['Sièges avant chauffants.', ['equipment[32]']],
+      ['150 chevaux.', ['powerHp']],
+      ['43 500 km.', ['mileageKm']],
+      ['5 portes et 5 places.', ['description']],
+      ['Prix : 22 490 €.', ['price']],
+      ['Contactez Garage Horizon Automobiles, à Villefranche-sur-Saône.', ['sellerName', 'city']],
+      // The seller's offers may be said as offers, not as included.
+      ['Financement de 12 à 72 mois sur demande.', ['description']],
+      ['Extension de garantie jusqu’à 60 mois en option.', ['description']],
+    ];
+    for (const [text, facts] of cases) expect(says(text, facts), text).toEqual([]);
+  });
+
+  it('rejects a warranty length that is not the included one, whatever the unit', () => {
+    expect(says('Garantie 60 mois.')).toEqual([included12('60 mois')]);
+    expect(says('Garantie jusqu’à 60 mois.')).toEqual([included12('60 mois')]);
+    expect(says('Garantie 72 mois.')).toEqual([included12('72 mois')]);
+    // 60 months are in the sheet (the extension), 5 years are not the included warranty.
+    expect(says('Garantie 5 ans.')).toEqual([included12('5 ans')]);
+    // 2 is in the sheet (the keys), 2 years are not: reported once, as a number.
+    expect(says('2 ans de garantie.')).toEqual([at('text', '« 2 ans » ne figure pas dans la fiche')]);
+    // Same clause: the loan's length would be heard as the warranty's.
+    expect(says('Garantie 12 mois et financement sur 72 mois.')).toEqual([included12('72 mois')]);
+  });
+
+  it('reads a number with its unit: a value of the sheet under another unit is not in the sheet', () => {
+    // 3 is in the sheet (03/2022), 3 years are not.
+    expect(says('Moins de 3 ans.')).toEqual([at('text', '« 3 ans » ne figure pas dans la fiche')]);
+    expect(says('150 cv.', ['powerHp'])).toEqual([at('text', '« 150 cv » ne figure pas dans la fiche')]);
+    expect(says('5 places, 6 portes.')).toEqual([at('text', '« 6 portes » ne figure pas dans la fiche')]);
+    // A number the sheet does not have at all keeps the plain message.
+    expect(says('Garantie 24 mois.')).toEqual([at('text', '« 24 » ne figure pas dans la fiche')]);
+  });
+
+  it('does not take the dealer’s boilerplate for an included warranty', () => {
+    const boilerplateOnly = parseSheet({ ...dealer, description: dealer.description?.replace(', garantie 12 mois', '') });
+    expect(says('Garantie 12 mois.', ['description'], boilerplateOnly)).toEqual([notSaid('Garantie', 'garantie')]);
+    expect(says('Kilométrage garanti.', ['description'], boilerplateOnly)).toEqual([]);
+    // The warranty field counts, with its own length: 24 months, said as 2 years.
+    const withField = parseSheet({ ...boilerplateOnly, warranty: 'Garantie 24 mois' });
+    expect(says('Garantie 2 ans.', ['warranty'], withField)).toEqual([]);
+    expect(says('Garantie 60 mois.', ['warranty'], withField)).toEqual([
+      at('text', '« 60 mois » : la garantie incluse selon la fiche est de 24 mois'),
+    ]);
+  });
+
+  it('rejects options and services the sheet does not list', () => {
+    expect(says('Toit ouvrant panoramique.')).toEqual([notSaid('Toit ouvrant', 'toit ouvrant ou panoramique')]);
+    expect(says('Navigation GPS et Apple CarPlay.')).toEqual([
+      notSaid('Navigation', 'navigation'),
+      notSaid('Apple CarPlay', 'CarPlay ou Android Auto'),
+    ]);
+    expect(says('Caméra de recul.')).toEqual([notSaid('Caméra', 'caméra')]);
+    // "Volant cuir" is a steering wheel, not the upholstery.
+    expect(says('Sellerie cuir.')).toEqual([notSaid('cuir', 'sellerie cuir')]);
+    expect(says('Volant cuir et sièges sport.', ['equipment[35]', 'equipment[33]'])).toEqual([]);
+    expect(says('Transmission intégrale quattro.')).toEqual([notSaid('Transmission intégrale', '4 roues motrices')]);
+    expect(says('Garantie constructeur.')).toEqual([notSaid('Garantie constructeur', 'garantie constructeur')]);
+    expect(says('Extension de garantie offerte.')).toEqual([notSaid('offerte', 'offert')]);
+    expect(says('Financement inclus sur 72 mois.')).toEqual([notSaid('Financement inclus', 'offre incluse')]);
+    expect(says('Sous la cote Argus.')).toEqual([notSaid('Sous la cote', 'cote')]);
+    // "avant livraison" is in the sheet: a delivery service is not.
+    expect(says('Livraison partout en France.')).toEqual([notSaid('Livraison partout', 'livraison')]);
+    expect(says('Financement sans apport.')).toEqual([notSaid('sans apport', 'sans apport')]);
+  });
+
+  it('only takes a quality from the seller’s sentences, never from an equipment label', () => {
+    // "Profil de conduite dynamique" and "Capteur de luminosité" are in the equipment list.
+    expect(says('Une conduite dynamique.')).toEqual([notSaid('dynamique', 'qualités de conduite')]);
+    expect(says('Un habitacle lumineux.')).toEqual([notSaid('lumineux', 'lumineux')]);
+    const described = parseSheet({ ...dealer, description: `${dealer.description}\nUne conduite dynamique et un habitacle lumineux.` });
+    expect(says('Une conduite dynamique, un habitacle lumineux.', ['description'], described)).toEqual([]);
+    // Each word needs its own evidence: "dynamique" in the sheet does not make the car comfortable.
+    expect(says('Confortable et dynamique.', ['description'], described)).toEqual([notSaid('Confortable', 'qualités de conduite')]);
+  });
+
+  it('ties a cited equipment to the words of the segment', () => {
+    // equipment[21] is "Radar de stationnement arrière": in range, but not what the segment says.
+    expect(says('Sièges avant chauffants.', ['equipment[21]'])).toEqual([
+      at('facts', '« equipment[21] » (« Radar de stationnement arrière ») : le segment n’en reprend aucun mot, cite l’élément qu’il énonce'),
+    ]);
+    // Plural, abbreviation said in full, short item.
+    expect(says('Un siège avant chauffant.', ['equipment[32]'])).toEqual([]);
+    expect(says('La clim bizone.', ['equipment[27]'])).toEqual([]);
+    expect(says('ABS et ESP.', ['equipment[37]', 'equipment[40]'])).toEqual([]);
+  });
+
+  it('keeps HT and TTC away from the price, which the sheet does not qualify', () => {
+    expect(says('Prix : 22 490 € HT.', ['price'])).toEqual([at('text', '« HT » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('Prix TTC : 22 490 €.', ['price'])).toEqual([at('text', '« TTC » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('22 490 euros hors taxes.', ['price'])).toEqual([at('text', '« hors taxes » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    // The export offer, said as an offer, gives no amount.
+    expect(says('Vente hors taxes possible pour l’export hors Union européenne.')).toEqual([]);
   });
 });
 
@@ -366,6 +504,11 @@ describe('verifyWithClaude', () => {
     expect(params).not.toHaveProperty('temperature');
     expect(params.output_config.format.type).toBe('json_schema');
     expect(params.system).toContain('n’invente pas de problème');
+    // The seller's offers and the included warranty (factcheck.v2).
+    expect(params.system).toContain('justifie seulement qu’elle est proposée');
+    expect(params.system).toContain('une durée de garantie autre que celle que la fiche donne comme incluse');
+    expect(params.system).toContain('« HT » ou « TTC » accolé au prix');
+    expect(params.system).toContain('une qualité tirée du seul nom d’un équipement');
     const prompt = String(params.messages[0]?.content);
     expect(prompt).toContain('"mileageKm": 68000');
     expect(prompt).toContain('Elle affiche 68 000 kilomètres');
@@ -373,7 +516,7 @@ describe('verifyWithClaude', () => {
     expect(prompt).not.toContain('"facts"');
     expect(prompt).not.toContain('sourceUrl');
     expect(prompt).not.toContain('img.leboncoin.fr');
-    expect(FACTCHECK_PROMPT_VERSION).toBe('factcheck.v1');
+    expect(FACTCHECK_PROMPT_VERSION).toBe('factcheck.v2');
   });
 
   it('sends no effort field on the wire either (real SDK)', async () => {

@@ -1,8 +1,8 @@
 import type { Language } from '../pipeline/types';
-import { LANGUAGE_NAMES } from './script.v1';
+import { LANGUAGE_NAMES } from './script.v2';
 
 /** Stored with each check so a verdict can be traced back to its prompt. */
-export const FACTCHECK_PROMPT_VERSION = 'factcheck.v1';
+export const FACTCHECK_PROMPT_VERSION = 'factcheck.v2';
 
 /**
  * Instructions for the judge (Haiku) that reads both scripts against the sheet and
@@ -12,11 +12,15 @@ export const FACTCHECK_PROMPT_VERSION = 'factcheck.v1';
 export function factcheckSystemPrompt(): string {
   return `Tu vérifies les textes de deux courtes vidéos écrites à partir de la fiche d’une annonce (voiture d’occasion ou bien immobilier). Ta seule tâche : relever chaque affirmation qui n’est pas justifiée par la fiche JSON fournie. La fiche est la seule référence : n’utilise pas tes connaissances sur la marque, le modèle, la ville ou le quartier.
 
-Une affirmation est justifiée quand la fiche contient la même information, éventuellement reformulée ou traduite, avec les mêmes valeurs : « 68 000 km » correspond à "mileageKm": 68000, « boîte manuelle » à "gearbox": "Manuelle", « 15 990 € » à "price": 15990.
+Une affirmation est justifiée quand la fiche contient la même information, éventuellement reformulée ou traduite, avec les mêmes valeurs : « 68 000 km » correspond à "mileageKm": 68000, « boîte manuelle » à "gearbox": "Manuelle", « 15 990 € » à "price": 15990. Une offre commerciale du vendeur (financement, extension de garantie, vente HT à l’export, livraison, reprise, préparation) justifie seulement qu’elle est proposée : pas qu’elle est incluse, offerte ou qu’elle fait partie du véhicule.
 
 Relève :
 - une valeur différente de la fiche (kilométrage, année, prix, puissance, surface, nombre de pièces, durée de garantie…) ;
+- une durée de garantie autre que celle que la fiche donne comme incluse : la durée maximale d’une extension de garantie ou d’un financement n’est pas la garantie du véhicule ;
+- une offre commerciale du vendeur présentée comme incluse, offerte ou comme une caractéristique du véhicule ;
+- « HT » ou « TTC » accolé au prix : la fiche ne le précise pas ;
 - un équipement, une caractéristique, un état, un historique (entretien, propriétaires, accidents, contrôle technique), une qualité ou un usage (« idéal pour la famille », « économique », « spacieux », « fiable », « lumineux », « calme ») que la fiche ne mentionne pas ;
+- une qualité tirée du seul nom d’un équipement : « Capteur de luminosité » ne dit pas que l’habitacle est lumineux, « Commande du comportement dynamique » ne dit pas que la conduite est dynamique ;
 - une déduction tirée de la marque, du modèle ou de la ville, même plausible (« 5 places », « faible consommation », « quartier recherché ») ;
 - un nom, une ville, un numéro de téléphone, une adresse web ou e-mail absents de la fiche.
 
