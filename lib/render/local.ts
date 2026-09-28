@@ -108,8 +108,13 @@ export async function measureAudioFile(path: string): Promise<AudioLevel> {
     ...['-v', 'error', '-i', resolve(path), '-vn'],
     ...['-ac', '2', '-ar', String(LOUDNESS_SAMPLE_RATE), '-c:a', 'pcm_s16le', '-f', 'wav', '-'],
   ];
-  // Same working directory as Remotion's own calls, next to the ffmpeg libraries.
-  const child = spawn(ffmpeg, args, { cwd: dirname(ffmpeg), stdio: ['ignore', 'pipe', 'pipe'] });
+  // Launched as Remotion launches it (call-ffmpeg.js): this call comes before any of
+  // Remotion's own, so it restores the execute bit a package manager may drop, runs
+  // next to the ffmpeg libraries, and points macOS to them.
+  RenderInternals.makeFileExecutableIfItIsNot(ffmpeg);
+  const cwd = dirname(ffmpeg);
+  const env = process.platform === 'darwin' ? { ...process.env, DYLD_LIBRARY_PATH: cwd } : process.env;
+  const child = spawn(ffmpeg, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
   const chunks: Buffer[] = [];
   let stderr = '';
   child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
