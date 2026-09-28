@@ -327,10 +327,32 @@ function energyClass(attr: Attribute | undefined): PropertySheet['dpe'] {
   return letter?.toUpperCase() as PropertySheet['dpe'];
 }
 
+/**
+ * Ticked options as the page shows them: outdoor spaces first ("Terrasse", "Piscine"),
+ * then the other characteristics ("Cuisine équipée"), then the seller's own bullet list.
+ * Checked on a real exported house ad (2026-09-28), whose description had no bullets.
+ */
+function featuresOf(attrs: Map<string, Attribute>, body: string | undefined): string[] {
+  const listed = [...(attrs.get('outside_access')?.labels ?? []), ...(attrs.get('specificities')?.labels ?? []), ...descriptionBullets(body)];
+  const items = new Map<string, string>();
+  for (const item of listed) if (!items.has(item.toLowerCase())) items.set(item.toLowerCase(), item);
+  return [...items.values()];
+}
+
+/** real_estate_type value of a house: its floor_number ("0" on the real export) says nothing. */
+const HOUSE = '1';
+
+/** Floor of a flat: "0" is the ground floor. Absent for a house. */
+function floorOf(attrs: Map<string, Attribute>): string | undefined {
+  if (attrs.get('real_estate_type')?.value === HOUSE) return undefined;
+  const floor = attrs.get('floor_number');
+  const value = floor?.value ?? floor?.label;
+  return value === '0' ? 'Rez-de-chaussée' : (floor?.label ?? floor?.value);
+}
+
 function mapProperty(ad: Json, sourceUrl: string, transaction: PropertySheet['transaction']): PropertySheet {
   const attrs = attributes(ad);
   const seller = owner(ad);
-  const floor = attrs.get('floor_number');
   const sheet = validate(
     defined({
       vertical: 'immo',
@@ -344,12 +366,11 @@ function mapProperty(ad: Json, sourceUrl: string, transaction: PropertySheet['tr
       landM2: positive(decimal(attrs.get('land_plot_surface')?.value)),
       rooms: positive(wholeNumber(attrs.get('rooms')?.value)),
       bedrooms: wholeNumber(attrs.get('bedrooms')?.value),
-      floor: floor?.label ?? floor?.value,
+      floor: floorOf(attrs),
       ...place(ad),
       dpe: energyClass(attrs.get('energy_rate')),
       ges: energyClass(attrs.get('ges')),
-      // No documented feature attribute: the seller's own bullet list, if any, as written.
-      features: descriptionBullets(text(ad.body)),
+      features: featuresOf(attrs, text(ad.body)),
       description: text(ad.body),
       agencyName: seller.pro ? displayedSeller(attrs, seller.name) : undefined,
       photos: adPhotos(ad),

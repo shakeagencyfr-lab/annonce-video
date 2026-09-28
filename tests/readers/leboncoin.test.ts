@@ -191,6 +191,29 @@ describe('fromExport: real estate', () => {
     for (const key of ['dpe', 'ges', 'agencyName', 'landM2']) expect(key in sheet, key).toBe(false);
   });
 
+  it('lists outdoor spaces, then characteristics, then bullets; no floor for a house', () => {
+    // As on a real exported house ad (2026-09-28).
+    const exported = load('leboncoin-immo-export.json');
+    exported.ad.body = 'Belle maison.\n- Piscine\n- Portail électrique';
+    setAttribute(exported.ad, 'outside_access', { value: '', values: ['terrace', 'pool'], values_label: ['Terrasse', 'Piscine'] });
+    setAttribute(exported.ad, 'specificities', {
+      value: '',
+      values: ['equipped_kitchen', 'second_bathroom'],
+      values_label: ['Cuisine équipée', 'Plusieurs toilettes'],
+    });
+    setAttribute(exported.ad, 'floor_number', { value: '0', value_label: '0' });
+    const sheet = fromExport(exported);
+    expect(sheet).toMatchObject({ features: ['Terrasse', 'Piscine', 'Cuisine équipée', 'Plusieurs toilettes', 'Portail électrique'] });
+    expect('floor' in sheet).toBe(false);
+  });
+
+  it('calls floor 0 of a flat the ground floor', () => {
+    const exported = load('leboncoin-immo-export.json');
+    setAttribute(exported.ad, 'real_estate_type', { value: '2', value_label: 'Appartement' });
+    setAttribute(exported.ad, 'floor_number', { value: '0', value_label: '0' });
+    expect(fromExport(exported)).toMatchObject({ floor: 'Rez-de-chaussée' });
+  });
+
   it('refuses an ad without property type', () => {
     const exported = load('leboncoin-immo-export.json');
     setAttribute(exported.ad, 'real_estate_type', null);
