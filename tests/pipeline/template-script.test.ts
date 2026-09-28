@@ -64,6 +64,29 @@ describe('templateScripts', () => {
     expect(() => templateScripts(immo, 'de')).toThrow(/français/);
   });
 
+  it('names the city and its district, and the land of a house', () => {
+    const house: PropertySheet = {
+      vertical: 'immo',
+      platform: 'leboncoin',
+      sourceUrl: 'https://www.leboncoin.fr/ad/ventes_immobilieres/3259370552',
+      transaction: 'vente',
+      propertyType: 'Maison',
+      currency: 'EUR',
+      city: 'Marseille',
+      district: 'Château-Gombert',
+      surfaceM2: 120,
+      landM2: 1500,
+      features: [],
+      photos: [],
+    };
+    const [hook, size, land] = templateScripts(house, 'fr').social.segments;
+    expect(hook).toEqual({ kind: 'hook', text: 'Maison à Marseille, quartier Château-Gombert.', facts: ['propertyType', 'city', 'district'] });
+    expect(size?.text).toBe('120 m².');
+    expect(land).toEqual({ kind: 'point', text: 'Terrain de 1\u202f500 m².', facts: ['landM2'] });
+    const { city: _city, ...noCity } = house;
+    expect(templateScripts(noCity, 'fr').social.segments[0]?.text).toBe('Maison, quartier Château-Gombert.');
+  });
+
   it('formats prices with narrow no-break spaces', () => {
     expect(formatPrice(1234567, 'EUR')).toBe('1 234 567 €');
     expect(formatPrice(9000, 'CHF')).toBe('CHF 9 000');

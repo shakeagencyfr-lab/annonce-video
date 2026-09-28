@@ -191,6 +191,44 @@ describe('fromExport: real estate', () => {
     for (const key of ['dpe', 'ges', 'agencyName', 'landM2']) expect(key in sheet, key).toBe(false);
   });
 
+  // Shaped like a real exported house (2026-09-28): ticked features, a district, and
+  // floor_number filled in for a house.
+  it('maps ticked features and the district; a house has no floor', () => {
+    const exported = load('leboncoin-immo-export.json');
+    setAttribute(exported.ad, 'outside_access', {
+      value: '',
+      values: ['terrace', 'garden'],
+      value_label: 'Terrasse, Jardin',
+      values_label: ['Terrasse', 'Jardin'],
+    });
+    setAttribute(exported.ad, 'specificities', {
+      value: '',
+      values: ['with_garage_or_parking_spot', 'cellar'],
+      value_label: 'Avec garage ou place de parking, Cave',
+      values_label: ['Avec garage ou place de parking', 'Cave'],
+    });
+    // Codes without labels are never copied.
+    setAttribute(exported.ad, 'heating_mode', { value: 'electric', values: ['electric'] });
+    setAttribute(exported.ad, 'floor_number', { value: '1', values: ['1'], value_label: '1' });
+    setAttribute(exported.ad, 'district_visibility', { value: 'true', values: ['true'] });
+    exported.ad.location = { ...exported.ad.location, city_label: 'Marseille 13013 Château-Gombert', district: 'Château-Gombert' };
+    exported.ad.body = 'Maison lumineuse.\n- Piscine\n- cave';
+    const sheet = fromExport(exported);
+    expect(sheet).toMatchObject({
+      propertyType: 'Maison',
+      city: 'Marseille',
+      district: 'Château-Gombert',
+      features: ['Terrasse', 'Jardin', 'Avec garage ou place de parking', 'Cave', 'Piscine'],
+    });
+    expect('floor' in sheet).toBe(false);
+
+    setAttribute(exported.ad, 'district_visibility', { value: 'false', values: ['false'] });
+    setAttribute(exported.ad, 'real_estate_type', { value: '2', value_label: 'Appartement' });
+    const flat = fromExport(exported);
+    expect('district' in flat).toBe(false);
+    expect(flat).toMatchObject({ propertyType: 'Appartement', floor: '1' });
+  });
+
   it('refuses an ad without property type', () => {
     const exported = load('leboncoin-immo-export.json');
     setAttribute(exported.ad, 'real_estate_type', null);

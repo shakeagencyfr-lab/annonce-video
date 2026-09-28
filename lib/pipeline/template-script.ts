@@ -79,13 +79,13 @@ function vehicleScript(sheet: VehicleSheet, variant: Variant): VideoScript {
 
 function propertyScript(sheet: PropertySheet, variant: Variant): VideoScript {
   const segments: ScriptSegment[] = [];
-  const where = sheet.district ?? sheet.city;
+  const where = `${sheet.city ? ` à ${sheet.city}` : ''}${sheet.district ? `, quartier ${sheet.district}` : ''}`;
   segments.push(
-    segment(
-      'hook',
-      `${sheet.propertyType}${where ? ` à ${where}` : ''}.`,
-      ['propertyType', ...(sheet.district ? ['district'] : sheet.city ? ['city'] : [])],
-    ),
+    segment('hook', `${sheet.propertyType}${where}.`, [
+      'propertyType',
+      ...(sheet.city ? ['city'] : []),
+      ...(sheet.district ? ['district'] : []),
+    ]),
   );
   const size = [
     sheet.surfaceM2 !== undefined ? `${formatNumber(sheet.surfaceM2)} m²` : undefined,
@@ -95,6 +95,9 @@ function propertyScript(sheet: PropertySheet, variant: Variant): VideoScript {
   if (size.length > 0) {
     const facts = [sheet.surfaceM2 !== undefined && 'surfaceM2', sheet.rooms !== undefined && 'rooms', sheet.bedrooms !== undefined && 'bedrooms'];
     segments.push(segment('point', `${size.join(', ')}.`, facts.filter((f): f is string => Boolean(f))));
+  }
+  if (sheet.landM2 !== undefined) {
+    segments.push(segment('point', `Terrain de ${formatNumber(sheet.landM2)} m².`, ['landM2']));
   }
   const features = sheet.features.slice(0, 3);
   if (features.length > 0) {

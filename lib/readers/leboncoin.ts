@@ -213,6 +213,15 @@ function place(ad: Json) {
   return { city: text(location?.city), postalCode: text(location?.zipcode) };
 }
 
+/**
+ * The district the page shows after the city ("Dampmart 77400 Saint Laurent - Hauts de
+ * Lagny"), unless the ad hides it (district_visibility "false").
+ */
+function district(ad: Json, attrs: Map<string, Attribute>): string | undefined {
+  if (attrs.get('district_visibility')?.value === 'false') return undefined;
+  return text(obj(ad.location)?.district);
+}
+
 function owner(ad: Json): { pro: boolean; name?: string; siren?: string } {
   const o = obj(ad.owner);
   const type = text(o?.type);
@@ -327,17 +336,35 @@ function energyClass(attr: Attribute | undefined): PropertySheet['dpe'] {
   return letter?.toUpperCase() as PropertySheet['dpe'];
 }
 
+/**
+ * Features the seller ticked, as the page shows them: outside ("Terrasse", "Jardin"),
+ * then specificities ("Cave", "Cuisine séparée"…), then the seller's own bullet list.
+ * Labels only: values are codes ("with_garage_or_parking_spot").
+ */
+function featuresOf(attrs: Map<string, Attribute>, body: string | undefined): string[] {
+  const items = new Map<string, string>();
+  const ticked = ['outside_access', 'specificities'].flatMap((key) => attrs.get(key)?.labels ?? []);
+  for (const item of [...ticked, ...descriptionBullets(body)]) {
+    const key = item.toLowerCase();
+    if (!items.has(key)) items.set(key, item);
+  }
+  return [...items.values()];
+}
+
 function mapProperty(ad: Json, sourceUrl: string, transaction: PropertySheet['transaction']): PropertySheet {
   const attrs = attributes(ad);
   const seller = owner(ad);
-  const floor = attrs.get('floor_number');
+  const propertyType = attrs.get('real_estate_type')?.label;
+  // "Étage de votre bien" is the floor of a flat. Houses fill it too (1 for a house with
+  // an upper floor), where "au 1er étage" would be false: left out for houses.
+  const floor = propertyType === 'Maison' ? undefined : attrs.get('floor_number');
   const sheet = validate(
     defined({
       vertical: 'immo',
       platform: PLATFORM,
       sourceUrl,
       transaction,
-      propertyType: attrs.get('real_estate_type')?.label,
+      propertyType,
       price: price(ad),
       currency: 'EUR',
       surfaceM2: positive(decimal(attrs.get('square')?.value)),
@@ -346,10 +373,10 @@ function mapProperty(ad: Json, sourceUrl: string, transaction: PropertySheet['tr
       bedrooms: wholeNumber(attrs.get('bedrooms')?.value),
       floor: floor?.label ?? floor?.value,
       ...place(ad),
+      district: district(ad, attrs),
       dpe: energyClass(attrs.get('energy_rate')),
       ges: energyClass(attrs.get('ges')),
-      // No documented feature attribute: the seller's own bullet list, if any, as written.
-      features: descriptionBullets(text(ad.body)),
+      features: featuresOf(attrs, text(ad.body)),
       description: text(ad.body),
       agencyName: seller.pro ? displayedSeller(attrs, seller.name) : undefined,
       photos: adPhotos(ad),
