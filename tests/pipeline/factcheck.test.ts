@@ -83,7 +83,7 @@ describe('checkScripts', () => {
     expect(findNumbers('A3 150 ch').map((n) => n.raw)).toEqual(['3', '150']);
   });
 
-  it('reads decimal surfaces of a property sheet', () => {
+  it('reads a property sheet: decimal surfaces, consumption, ticked features', () => {
     const immo: PropertySheet = {
       vertical: 'immo',
       platform: 'seloger',
@@ -134,6 +134,22 @@ describe('checkScripts', () => {
       '« calme » (calme) : la fiche ne le dit pas',
       '« sans vis-à-vis » (sans vis-à-vis) : la fiche ne le dit pas',
     ]);
+
+    // A feature the seller ticked is the seller's word; the consumption keeps its unit;
+    // a building's legal warranty is its own claim, not a warranty with a duration.
+    const ticked = parseSheet({
+      ...immo,
+      features: ['Balcon', 'Cave', 'Calme'],
+      description: 'Appartement lumineux au 2e étage. Garantie décennale. Consommation énergie primaire : 201 kWh/m²/an.',
+    });
+    const says = (text: string) => {
+      const changed = structuredClone(scripts);
+      setText(changed, 'listing', 1, text);
+      return checkScripts(changed, ticked).map((p) => p.message);
+    };
+    expect(says('Au calme, 201 kWh par m² et par an, garantie décennale.')).toEqual([]);
+    expect(says('Une surface de 201 m².')).toEqual(['« 201 m² » ne figure pas dans la fiche']);
+    expect(says('Garantie 10 ans.')).toEqual(['« 10 » ne figure pas dans la fiche', '« Garantie » (garantie) : la fiche ne le dit pas']);
   });
 
   it('flags claims the sheet does not support, and accepts those it states', () => {
@@ -416,8 +432,17 @@ describe('checkScripts on a pro dealer’s listing', () => {
   });
 
   it('reads a number with its unit: a value of the sheet under another unit is not in the sheet', () => {
-    // 3 is in the sheet (03/2022), 3 years are not.
-    expect(says('Moins de 3 ans.')).toEqual([at('text', '« 3 ans » ne figure pas dans la fiche')]);
+    // 3 is in the sheet (03/2022), 3 years are not; and the sheet gives no age.
+    expect(says('Moins de 3 ans.')).toEqual([at('text', '« 3 ans » ne figure pas dans la fiche'), notSaid('Moins de 3 ans', 'âge')]);
+    // 5 years are 60 months, which the sheet has (the extension): still not an age it gives.
+    expect(says('Moins de 5 ans.')).toEqual([notSaid('Moins de 5 ans', 'âge')]);
+    expect(says('Moins d’un an.')).toEqual([
+      at('text', '« un an » : écris les nombres en chiffres pour qu’ils soient vérifiables'),
+      notSaid('Moins d’un an', 'âge'),
+    ]);
+    // "à" between a year and a mileage is not a range: 2022 is not "2022 km".
+    expect(says('Une T-Roc 2022 à 43 500 km.', ['year', 'mileageKm'])).toEqual([]);
+    expect(says('De 2022 à 43 500 km.', ['year', 'mileageKm'])).toEqual([]);
     expect(says('150 cv.', ['powerHp'])).toEqual([at('text', '« 150 cv » ne figure pas dans la fiche')]);
     expect(says('5 places, 6 portes.')).toEqual([at('text', '« 6 portes » ne figure pas dans la fiche')]);
     // A number the sheet does not have at all keeps the plain message.
@@ -428,6 +453,20 @@ describe('checkScripts on a pro dealer’s listing', () => {
     const boilerplateOnly = parseSheet({ ...dealer, description: dealer.description?.replace(', garantie 12 mois', '') });
     expect(says('Garantie 12 mois.', ['description'], boilerplateOnly)).toEqual([notSaid('Garantie', 'garantie')]);
     expect(says('Kilométrage garanti.', ['description'], boilerplateOnly)).toEqual([]);
+    // Spelled out, a duration escapes the check: "un an" would stand for any warranty.
+    expect(says('Garantie d’un an.')).toEqual([at('text', '« un an » : écris les nombres en chiffres pour qu’ils soient vérifiables')]);
+    // Other ways a seller gives the included warranty, and ways that are not one.
+    const withText = (text: string) => parseSheet({ ...boilerplateOnly, description: `${text}\n\n${boilerplateOnly.description}` });
+    for (const text of ['Vendue avec 12 mois de garantie.', 'Garantie mécanique 12 mois.', 'Garantie : 1 an.']) {
+      expect(says('Garantie 12 mois.', ['description'], withText(text)), text).toEqual([]);
+    }
+    for (const text of ['Garantie 12 mois en option.', 'Possibilité de passer jusqu’à 36 mois de garantie.', 'Garantie décennale sur la peinture.']) {
+      expect(says('Garantie 12 mois.', ['description'], withText(text)), text).toEqual([notSaid('Garantie', 'garantie')]);
+    }
+    // "Km garanti" and "Kilométrage garanti" are the same fact, and neither is a warranty.
+    const km = parseSheet({ ...boilerplateOnly, description: boilerplateOnly.description?.replace('Kilométrage garanti', 'Km garanti') });
+    expect(says('Kilométrage garanti.', ['description'], km)).toEqual([]);
+    expect(says('Kilométrage garanti, garantie 12 mois.', ['description'], km)).toEqual([notSaid('garantie', 'garantie')]);
     // The warranty field counts, with its own length: 24 months, said as 2 years.
     const withField = parseSheet({ ...boilerplateOnly, warranty: 'Garantie 24 mois' });
     expect(says('Garantie 2 ans.', ['warranty'], withField)).toEqual([]);
@@ -454,6 +493,23 @@ describe('checkScripts on a pro dealer’s listing', () => {
     // "avant livraison" is in the sheet: a delivery service is not.
     expect(says('Livraison partout en France.')).toEqual([notSaid('Livraison partout', 'livraison')]);
     expect(says('Financement sans apport.')).toEqual([notSaid('sans apport', 'sans apport')]);
+    // Numbers between the offer and "inclus" do not hide it.
+    expect(says('Extension de garantie de 60 mois incluse.')).toEqual([notSaid('Extension de garantie de 60 mois incluse', 'offre incluse')]);
+    expect(says('Financement sur 72 mois inclus.')).toEqual([notSaid('Financement sur 72 mois inclus', 'offre incluse')]);
+    expect(says('Frais de mise à la route inclus.')).toEqual([notSaid('mise à la route inclus', 'offre incluse')]);
+    // … and a new item after "et" is not the offer: the included warranty is.
+    expect(says('Préparation à l’atelier et garantie 12 mois incluse.')).toEqual([]);
+    expect(says('Reprise de votre véhicule.')).toEqual([notSaid('Reprise', 'reprise')]);
+    const noOffers = parseSheet({ ...dealer, description: 'Volkswagen T-Roc, garantie 12 mois.' });
+    expect(says('Financement possible.', ['description'], noOffers)).toEqual([notSaid('Financement', 'financement')]);
+    // Short forms.
+    expect(says('Toit pano.')).toEqual([notSaid('Toit pano', 'toit ouvrant ou panoramique')]);
+    expect(says('Apple Car Play.')).toEqual([notSaid('Apple Car Play', 'CarPlay ou Android Auto')]);
+    expect(says('Traction intégrale.')).toEqual([notSaid('Traction intégrale', '4 roues motrices')]);
+    expect(says('Prix au-dessous de la cote.')).toEqual([notSaid('dessous de la cote', 'cote')]);
+    // The title and the version are the seller's words too.
+    const version = parseSheet({ ...dealer, version: '2.0 TDI 150 4Motion Style', title: 'Volkswagen T-Roc 4Motion toit panoramique' });
+    expect(says('Transmission 4Motion et toit panoramique.', ['version', 'title'], version)).toEqual([]);
   });
 
   it('only takes a quality from the seller’s sentences, never from an equipment label', () => {
@@ -464,6 +520,10 @@ describe('checkScripts on a pro dealer’s listing', () => {
     expect(says('Une conduite dynamique, un habitacle lumineux.', ['description'], described)).toEqual([]);
     // Each word needs its own evidence: "dynamique" in the sheet does not make the car comfortable.
     expect(says('Confortable et dynamique.', ['description'], described)).toEqual([notSaid('Confortable', 'qualités de conduite')]);
+    // The equipment said as listed is not a quality; a trim is the seller's word.
+    expect(says('Profil de conduite dynamique et capteur de luminosité.', ['equipment[15]', 'equipment[11]'])).toEqual([]);
+    const trim = parseSheet({ ...dealer, version: '1.5 TSI 150 Dynamique' });
+    expect(says('Finition Dynamique.', ['version'], trim)).toEqual([]);
   });
 
   it('ties a cited equipment to the words of the segment', () => {
@@ -475,12 +535,23 @@ describe('checkScripts on a pro dealer’s listing', () => {
     expect(says('Un siège avant chauffant.', ['equipment[32]'])).toEqual([]);
     expect(says('La clim bizone.', ['equipment[27]'])).toEqual([]);
     expect(says('ABS et ESP.', ['equipment[37]', 'equipment[40]'])).toEqual([]);
+    // Said shorter than listed, and an acronym next to long words.
+    expect(says('La clim auto.', ['equipment[27]'])).toEqual([]);
+    const equipment = dealer.vertical === 'auto' ? dealer.equipment : [];
+    const gps = parseSheet({ ...dealer, equipment: [...equipment, 'Navigation GPS'] });
+    expect(says('Le GPS.', [`equipment[${equipment.length}]`], gps)).toEqual([]);
   });
 
   it('keeps HT and TTC away from the price, which the sheet does not qualify', () => {
     expect(says('Prix : 22 490 € HT.', ['price'])).toEqual([at('text', '« HT » : la fiche ne dit pas si le prix est HT ou TTC')]);
     expect(says('Prix TTC : 22 490 €.', ['price'])).toEqual([at('text', '« TTC » : la fiche ne dit pas si le prix est HT ou TTC')]);
     expect(says('22 490 euros hors taxes.', ['price'])).toEqual([at('text', '« hors taxes » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    // Anywhere in the text that says the price, with or without the currency.
+    expect(says('Prix : 22 490 HT.', ['price'])).toEqual([at('text', '« HT » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('Prix : 22 490 € H.T.', ['price'])).toEqual([at('text', '« H.T. » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('Prix hors taxes de 22 490 €.', ['price'])).toEqual([at('text', '« hors taxes » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('22 490 €, TVA incluse.', ['price'])).toEqual([at('text', '« TVA incluse » : la fiche ne dit pas si le prix est HT ou TTC')]);
+    expect(says('TVA récupérable.')).toEqual([notSaid('TVA récupérable', 'TVA récupérable')]);
     // The export offer, said as an offer, gives no amount.
     expect(says('Vente hors taxes possible pour l’export hors Union européenne.')).toEqual([]);
   });

@@ -209,10 +209,10 @@ export function findWebAddresses(folded: string): string[] {
 /**
  * Where a claim's evidence is looked for:
  * - "sheet": the sheet's texts (EVIDENCE_FIELDS);
- * - "items": the equipment or features and the description, for options and services;
- * - "free": the seller's own sentences (title, description without its equipment
- *   list), for qualities: an equipment label names a device, not a quality
- *   ("Capteur de luminosité" does not make a car bright).
+ * - "items": the listed items and the seller's text (ITEM_FIELDS), for options and services;
+ * - "free": the seller's own words (see freeText), for qualities: an equipment label
+ *   names a device, not a quality ("Capteur de luminosité" does not make a car bright).
+ *   The script may still say a label as it is: labels are blanked out before these rules.
  */
 export type EvidenceSource = 'sheet' | 'items' | 'free';
 
@@ -254,11 +254,8 @@ export type LanguageRules = {
   priceWords: RegExp;
   /** How each currency is written: the "social" variant may only name the sheet's. */
   currencies: Record<VehicleSheet['currency'], RegExp>;
-  /**
-   * "HT", "TTC"… next to the amount (group 1): the sheet never says which the price is.
-   * `after` reads the text after the number, `before` the text before it.
-   */
-  priceQualifier: { after: RegExp; before: RegExp };
+  /** "HT", "TTC"… in a text that says the price: the sheet never says which the price is. */
+  priceQualifier: RegExp;
   /** Numbers written in words, which the digit check cannot verify. */
   spelledNumbers: RegExp;
   /**
@@ -302,23 +299,49 @@ const each = (label: string, source: EvidenceSource, ...alternatives: RegExp[]):
 /** A quality: only the seller's own sentences are evidence. */
 const quality = (label: string, ...alternatives: RegExp[]) => each(label, 'free', ...alternatives);
 
-/** An option or a service that is easy to invent: only the listed items and the description are evidence. */
+/** An option or a service that is easy to invent: only the listed items and the seller's text are evidence (ITEM_FIELDS). */
 const option = (label: string, ...alternatives: RegExp[]) => each(label, 'items', ...alternatives);
 
+/** A building's legal warranties: not a warranty the seller gives, each its own claim. */
+const BUILDING_WARRANTIES = [/\bgarantie decennale\b/, /\bgarantie biennale\b/, /\b(?:garantie|assurance) dommages?[ -]ouvrages?\b/];
+
 /**
- * "Garanti…" that is not the car's warranty: the mileage, or the paid extension with
- * the durations it offers ("extension de garantie de 12 à 60 mois").
+ * A warranty and its duration as a seller writes it: "garantie 12 mois", "garantie : 1 an",
+ * "garantie mécanique 12 mois" (a closed list of kinds: any word could be "jusqu'à").
  */
-const NOT_THE_WARRANTY =
-  /\bkilometrage garanti\b|\bextensions? de (?:la )?garantie\b(?: (?:de \d+ ?(?:a|au|-) ?\d+|(?:de|jusqu'a|sur|a) \d+) ?(?:mois|ans?)\b)?/;
+const WARRANTY_DURATION = String.raw`\bgaranti(?:e|es|s)?(?: (?:mecanique|moteur|totale|vo|occasion|constructeur|contractuelle|commerciale|pieces et main[ -]d'(?:oeuvre|œuvre)))? ?(?:: ?|de )?\d+ ?(?:mois|ans?)\b`;
+
+/**
+ * "Garanti…" that is not the car's warranty: the mileage, the paid extension with the
+ * durations it offers ("extension de garantie de 12 à 60 mois"), a warranty sold as an
+ * option ("garantie 12 mois en option"), a building's legal warranties.
+ */
+const NOT_THE_WARRANTY = new RegExp(
+  [
+    String.raw`\b(?:kilometrage|km) garanti\b`,
+    String.raw`\bextensions? de (?:la )?garantie\b(?: (?:de \d+ ?(?:a|au|-) ?\d+|(?:de|jusqu'a|sur|a) \d+) ?(?:mois|ans?)\b)?`,
+    String.raw`(?:${WARRANTY_DURATION}|\b\d+ ?(?:mois|ans?) de garantie) (?:en option|optionnelle|payante|supplementaire|additionnelle|complementaire)s?\b`,
+    ...BUILDING_WARRANTIES.map((pattern) => pattern.source),
+  ].join('|'),
+);
+
+/**
+ * A warranty the sheet gives with its duration (WARRANTY_DURATION), or "12 mois de
+ * garantie" when nothing before makes it the end of a range or an extension ("jusqu'à 60
+ * mois de garantie"). Read once NOT_THE_WARRANTY is blanked out.
+ */
+const INCLUDED_WARRANTY = new RegExp(String.raw`${WARRANTY_DURATION}|(?:^|[\n,.;:(!?–-]|\bavec) ?\d+ ?(?:mois|ans?) de garantie\b`, 'm');
 
 const FRENCH_WARRANTY = claim(
   'garantie',
   /\bgaranti(?:e|es|s)?\b/,
-  /\bgaranti(?:e|es|s)? ?(?:: ?|de )?\d+ ?(?:mois|ans?)\b|\bgarantie (?:du )?constructeur\b/,
+  new RegExp(String.raw`${INCLUDED_WARRANTY.source}|\bgarantie (?:du )?constructeur\b`, 'm'),
   ['warranty'],
   { ignore: NOT_THE_WARRANTY },
 );
+
+/** Words between a seller's offer and "inclus": numbers and units count, a new item ("et …") does not. */
+const OFFER_GAP = String.raw`(?: (?!(?:et|ou|avec|mais)\b)[\p{L}\p{N}'-]+){0,4}`;
 
 /** Leather that is not the upholstery: a leather steering wheel or gear knob, imitation leather. */
 const NOT_UPHOLSTERY =
@@ -328,23 +351,22 @@ const FRENCH: LanguageRules = {
   // "Euro 6" is an emission standard, not money.
   priceWords: /€|\b(?:euros|eur|chf|francs?|prix|tarifs?)\b|\beuro\b(?! ?\d)/,
   currencies: { EUR: /€|\b(?:euros|eur)\b|\beuro\b(?! ?\d)/, CHF: /\b(?:chf|francs?)\b/ },
-  priceQualifier: {
-    after: /^ ?(?:€|euros?|eur|chf|francs?(?: suisses)?)? ?(ht|ttc|hors taxes?|toutes taxes comprises)(?![\p{L}\p{N}])/u,
-    before: /\b(ht|ttc|hors taxes?|toutes taxes comprises) ?:? ?(?:€|chf)? ?$/,
-  },
+  priceQualifier: /\b(?:ht|h\.t\.?|ttc|t\.t\.c\.?|hors taxes?|toutes taxes comprises|tva (?:incluse|comprise))(?![\p{L}\p{N}])/u,
+  // "un an" is a duration the digit check cannot read ("Garantie d'un an").
   spelledNumbers:
-    /\b(?:deux|trois|quatre|cinq|six|sept|huit|dix|onze|douze|quinze|vingt|trente|quarante|cinquante|soixante|cents?|mille|millions?)\b/,
+    /\b(?:deux|trois|quatre|cinq|six|sept|huit|dix|onze|douze|quinze|vingt|trente|quarante|cinquante|soixante|cents?|mille|millions?)\b|\bun (?:an|mois)\b|\bune annee\b/,
   units: [
     { words: 'mois', unit: 'month', factor: 1 },
     { words: 'ans?|annees?', unit: 'month', factor: 12 },
     { words: 'kms?|kilometres?', unit: 'km', factor: 1 },
     { words: 'chevaux fiscaux|cv', unit: 'fiscal-hp', factor: 1 },
     { words: 'ch|chevaux', unit: 'hp', factor: 1 },
-    { words: 'kwh', unit: 'kwh', factor: 1 },
+    // A property's consumption: "201 kWh/m²/an".
+    { words: 'kwh(?:/m[²2](?:/an)?)?', unit: 'kwh', factor: 1 },
     { words: 'm²|m2|metres? carres?', unit: 'm2', factor: 1 },
     { words: 'metres?', unit: 'm', factor: 1 },
     { words: 'm', unit: 'm', factor: 1, lowercase: true },
-    { words: 'pouces?', unit: 'inch', factor: 1 },
+    { words: `pouces?|''|"|″`, unit: 'inch', factor: 1 },
     { words: 'places?', unit: 'seat', factor: 1, counted: true },
     { words: 'portes?', unit: 'door', factor: 1, counted: true },
     { words: 'pieces?', unit: 'room', factor: 1, counted: true },
@@ -354,15 +376,19 @@ const FRENCH: LanguageRules = {
   rangeJoin: /^(?: (?:a|au|ou) |-|–)$/,
   rangeOpen: { before: /\bentre $/, join: /^ et $/ },
   contactWords: ['tel', 'telephone', 'a', 'au'],
-  warranty: {
-    claim: FRENCH_WARRANTY,
-    included: /\bgaranti(?:e|es|s)? ?(?:: ?|de )?\d+ ?(?:mois|ans?)\b/,
-  },
+  warranty: { claim: FRENCH_WARRANTY, included: INCLUDED_WARRANTY },
   claims: [
     FRENCH_WARRANTY,
-    claim('kilométrage garanti', /\bkilometrage garanti\b/),
+    claim('kilométrage garanti', /\b(?:kilometrage|km) garanti\b/),
     claim('extension de garantie', /\bextensions? de (?:la )?garantie\b/),
+    ...each('garantie du bâtiment', 'sheet', ...BUILDING_WARRANTIES),
     claim('première main', /\b(?:premiere|1re|1ere) main\b|\b(?:premier|seul|unique) proprietaire\b/),
+    // An age is not in the sheet (only the year), and a duration of the seller's
+    // boilerplate ("financement … 72 mois") would otherwise vouch for "moins de 6 ans".
+    claim(
+      'âge',
+      /\b(?:moins d'(?:un|une|\d+)|moins de \d+|a peine \d+|agee? (?:de )?(?:seulement |a peine )?\d+|seulement \d+) ?(?:ans?|annees?|mois)\b|\b(?:\d+|un) ?ans? d'age\b/,
+    ),
     claim('faible kilométrage', /\b(?:faible|petit|bas) kilometrage\b|\bpeu (?:de )?kilometres\b|\bpeu roulee?\b/),
     claim('entretien', /\bentretien\b|\bentretenue?s?\b|\bcarnet\b/),
     claim('factures', /\bfactures?\b/),
@@ -397,22 +423,32 @@ const FRENCH: LanguageRules = {
     ...quality('lumineux', /\blumine(?:ux|use|uses)\b|\bluminosite\b/, /\bensoleillee?s?\b/),
     ...quality('calme', /\bcalmes?\b|\bpaisible/),
     // Options and services often invented, or read into the seller's boilerplate.
-    ...option('toit ouvrant ou panoramique', /\btoit ouvrant\b/, /\b(?:toit|pavillon) (?:ouvrant )?(?:panoramique|vitre)\b/),
+    ...option('toit ouvrant ou panoramique', /\btoit ouvrant\b/, /\b(?:toit|pavillon) (?:ouvrant )?(?:panoramique|pano|vitre)\b/),
     ...option('navigation', /\bgps\b|\bnavigation\b|\bnavigateur\b/),
-    ...option('CarPlay ou Android Auto', /\b(?:apple )?carplay\b/, /\bandroid auto\b/),
+    ...option('CarPlay ou Android Auto', /\b(?:apple )?car ?play\b/, /\bandroid auto\b/),
     ...option('caméra', /\bcameras?\b/),
     claim('sellerie cuir', /\bcuir\b/, /\bcuir\b/, [], { source: 'items', ignore: NOT_UPHOLSTERY }),
-    ...option('4 roues motrices', /\btransmission integrale\b|\bquattro\b|\b4 ?x ?4\b|\b4 roues motrices\b|\b4motion\b|\bxdrive\b|\b(?:4wd|awd)\b/),
+    ...option(
+      '4 roues motrices',
+      /\b(?:transmission|traction) integrale\b|\bquattro\b|\b4 ?x ?4\b|\b4 roues motrices\b|\b4motion\b|\b4matic\b|\bxdrive\b|\ball4\b|\b(?:4wd|awd)\b/,
+    ),
     ...option('attelage', /\battelage\b/),
     ...option('hayon électrique', /\bhayon (?:electrique|motorise|automatique|mains libres)\b/),
     ...option('garantie constructeur', /\bgarantie (?:du )?constructeur\b/),
     ...option('offert', /\bofferte?s?\b|\bgratuite?s?\b|\bcadeau\b/),
     ...option(
       'offre incluse',
-      /\b(?:financements?|credits?|loa|lld|extensions? de (?:la )?garantie|reprise|preparation|livraison|carte grise)(?: [\p{L}'-]+){0,2} (?:inclus|incluses?|compris|comprises?)\b/u,
+      new RegExp(
+        String.raw`\b(?:financements?|credits?|loa|lld|extensions? de (?:la )?garantie|reprise|preparation|livraison|carte grise|frais|mise a la route|entretien|revisions?|controle technique|assurance)${OFFER_GAP} (?:inclus|incluses?|compris|comprises?)\b`,
+        'u',
+      ),
     ),
+    // Financing in general, then leasing products, which are not paraphrases of it.
+    ...option('financement', /\bfinancements?\b|\bfinancable\b|\bcredit\b|\bmensualites?\b/, /\bloa\b/, /\blld\b/, /\bleasing\b/),
+    ...option('reprise', /\breprises?\b|\breprenons\b/),
     ...option('sans apport', /\bsans apport\b/),
-    ...option('cote', /\bargus\b|\b(?:sous|en dessous de|au dessous de|inferieure? a) (?:la )?cote\b|\bcote (?:argus|lacentrale|la centrale)\b/),
+    ...option('TVA récupérable', /\btva (?:recuperable|deductible)\b/),
+    ...option('cote', /\bargus\b|\b(?:sous|dessous de|inferieure? a|moins chere? que) (?:la |l')?cote\b|\bcote (?:argus|lacentrale|la centrale)\b/),
     ...option(
       'livraison',
       /\blivraison (?:possible|partout|a domicile|dans toute|en france|gratuite|offerte|incluse)\b|\blivr(?:ee?s?|ons|able) (?:partout|a domicile|dans toute|chez vous)\b|\bnous livrons\b/,
@@ -467,23 +503,28 @@ function sheetText(sheet: Sheet): string {
   return fold(composed(texts.join('\n')));
 }
 
-/** Sheet text where options and services must be found: the listed items and the seller's text. */
-const ITEM_FIELDS = ['equipment', 'features', 'description', 'warranty'];
+/**
+ * Sheet text where options and services must be found: the listed items and the
+ * seller's text, with the title and the version ("2.0 TDI 190 quattro", "Toit pano").
+ */
+const ITEM_FIELDS = ['title', 'version', 'equipment', 'features', 'description', 'warranty'];
 
 /** A description line that lists an item ("- Capteur de luminosité"), as the readers see one. */
 const BULLET_LINE = /^\s*[-•*–]\s+/;
 
 /**
- * The seller's own sentences: the title and the description. For a car, without the
- * lines that list equipment, whose labels name devices ("Commande du comportement
- * dynamique"), not qualities. A property's bullet lines are the seller's words.
+ * The seller's own words: for a car, the title, the version (a trim such as
+ * "Dynamique" is the seller's) and the description without the lines that list
+ * equipment, whose labels name devices ("Commande du comportement dynamique"), not
+ * qualities. For a property, the description and the features, which the seller
+ * ticked or wrote ("Calme", "Lumineux").
  */
 function freeText(sheet: Sheet): string {
   const description = sheet.description ?? '';
-  if (sheet.vertical !== 'auto') return description;
+  if (sheet.vertical !== 'auto') return [description, ...sheet.features].join('\n');
   const items = new Set(sheet.equipment.map((item) => fold(composed(item)).trim()));
   const lines = description.split(/\r?\n/).filter((line) => !BULLET_LINE.test(line) && !items.has(fold(composed(line)).trim()));
-  return [sheet.title, ...lines].join('\n');
+  return [sheet.title, sheet.version ?? '', ...lines].join('\n');
 }
 
 function evidenceTexts(sheet: Sheet): Record<EvidenceSource, string> {
@@ -515,6 +556,11 @@ type Reading = {
   unitText: string;
   /** Where the number, and its own unit if any, end in the text. */
   end: number;
+  /**
+   * The unit is the one written after the other end of a range ("12 à 60 mois"). A
+   * guess: "une 2022 à 43 500 km" is a year and a mileage.
+   */
+  ranged: boolean;
 };
 
 const unitPatterns = new WeakMap<UnitRule, RegExp>();
@@ -530,7 +576,7 @@ function unitPattern(rule: UnitRule): RegExp {
   return pattern;
 }
 
-function unitAfter(text: string, folded: string, n: FoundNumber, rules: LanguageRules): Omit<Reading, 'n'> | null {
+function unitAfter(text: string, folded: string, n: FoundNumber, rules: LanguageRules): Omit<Reading, 'n' | 'ranged'> | null {
   const from = n.index + n.raw.length;
   for (const rule of rules.units) {
     const m = unitPattern(rule).exec(folded.slice(from));
@@ -553,13 +599,14 @@ function readNumbers(text: string, rules: LanguageRules): Reading[] {
   const readings: Reading[] = findNumbers(text).map((n) => ({
     n,
     ...(unitAfter(text, folded, n, rules) ?? { unit: null, unitText: '', end: n.index + n.raw.length }),
+    ranged: false,
   }));
   for (let i = readings.length - 2; i >= 0; i--) {
     const [a, b] = [readings[i], readings[i + 1]];
     if (!a || !b || a.unit || !b.unit) continue;
     const between = folded.slice(a.end, b.n.index);
     const opened = rules.rangeOpen.before.test(folded.slice(0, a.n.index)) && rules.rangeOpen.join.test(between);
-    if (rules.rangeJoin.test(between) || opened) readings[i] = { ...a, unit: b.unit, unitText: b.unitText };
+    if (rules.rangeJoin.test(between) || opened) readings[i] = { ...a, unit: b.unit, unitText: b.unitText, ranged: true };
   }
   return readings;
 }
@@ -627,21 +674,31 @@ const LETTERS = /\p{L}+/gu;
 const stem = (word: string) => (word.length > 4 ? word.replace(/[sx]$/, '') : word);
 
 /**
- * The words that tie an item to a text: those of 4 letters or more, apart from the
- * ignored ones (stop words, make and model); for an item of short words ("ABS"), those.
+ * The words that tie an item to a text: those of 4 letters or more and the acronyms
+ * ("Navigation GPS"), apart from the ignored ones (stop words, make and model); for an
+ * item of short words ("Clim"), those.
  */
 function itemWords(item: string, ignored: ReadonlySet<string>): string[] {
-  const words = (fold(composed(item)).match(LETTERS) ?? []).filter((w) => !ignored.has(w));
-  const long = words.filter((w) => w.length >= 4);
-  return (long.length > 0 ? long : words.filter((w) => w.length >= 2)).map(stem);
+  const original = composed(item);
+  // In an item written in capitals, every word looks like an acronym.
+  const capitals = original === original.toUpperCase();
+  const words = (original.match(LETTERS) ?? [])
+    .map((w) => ({ folded: fold(w), acronym: !capitals && /^\p{Lu}{2,}$/u.test(w) }))
+    .filter((w) => !ignored.has(w.folded));
+  const tying = words.filter((w) => w.folded.length >= 4 || w.acronym);
+  return (tying.length > 0 ? tying : words.filter((w) => w.folded.length >= 2)).map((w) => stem(w.folded));
 }
 
-/** Whether the text says one of the item's words, or a word it abbreviates ("Clim" for "climatisation"). */
+/**
+ * Whether the text says one of the item's words, a word it abbreviates or one that
+ * abbreviates it ("Clim auto" for "Climatisation automatique", and back).
+ */
 function saysItem(text: string, item: string, ignored: ReadonlySet<string>): boolean {
   const wanted = itemWords(item, ignored);
   if (wanted.length === 0) return true;
   const said = (fold(composed(text)).match(LETTERS) ?? []).map(stem);
-  return wanted.some((w) => said.some((s) => s === w || (w.length >= 4 && s.startsWith(w))));
+  const abbreviates = (short: string, long: string) => short.length >= 4 && !ignored.has(short) && long.startsWith(short);
+  return wanted.some((w) => said.some((s) => s === w || abbreviates(w, s) || abbreviates(s, w)));
 }
 
 // ---------------------------------------------------------------------------
@@ -719,19 +776,6 @@ function isAmount(text: string, n: FoundNumber, rules: LanguageRules): boolean {
   return currencyAround(rules).some((c) => c.after.test(after) || c.before.test(before));
 }
 
-/** "HT" or "TTC" written next to an amount, as written in the text. */
-function priceQualifierAt(text: string, n: FoundNumber, rules: LanguageRules): string | null {
-  const folded = fold(text);
-  const from = n.index + n.raw.length;
-  const after = rules.priceQualifier.after.exec(folded.slice(from));
-  if (after?.[1]) {
-    const end = from + after[0].length;
-    return text.slice(end - after[1].length, end);
-  }
-  const before = rules.priceQualifier.before.exec(folded.slice(0, n.index));
-  return before?.[1] ? text.slice(before.index, before.index + before[1].length) : null;
-}
-
 function checkScript(script: VideoScript, variant: Variant, sheet: Sheet): Problem[] {
   const rules = languageRules(script.language);
   const problems: Problem[] = [];
@@ -743,6 +787,9 @@ function checkScript(script: VideoScript, variant: Variant, sheet: Sheet): Probl
   const sheetPhone = sheet.phone ? phoneKey(sheet.phone) : undefined;
   const evidence = evidenceTexts(sheet);
   const names = foldedValues(sheet, NAME_FIELDS);
+  // Labels of several words, which name a device ("Capteur de luminosité"); a label of one
+  // quality word ("Dynamique") would blank that word out of every sentence.
+  const itemLabels = foldedValues(sheet, ['equipment', 'features']).filter((label) => /\s/.test(label));
   const addresses = sheetText(sheet);
 
   /** Whether the sheet supports a claim: it does not depend on the script's text. */
@@ -805,18 +852,20 @@ function checkScript(script: VideoScript, variant: Variant, sheet: Sheet): Probl
       reportedNumbers.add(r.n);
       add(where, kind, message);
     };
+    let saysPrice = false;
     for (const r of readings) {
       const { n } = r;
       const isPrice = sheet.price !== undefined && same(n.value, sheet.price);
+      if (isPrice) saysPrice = true;
       if (variant === 'listing' && isPrice) {
         report(r, 'price', `prix « ${n.raw} » : pas de prix dans la variante annonce`);
       } else if (variant === 'social' && isAmount(withoutPhones, n, rules)) {
-        const qualifier = isPrice ? priceQualifierAt(withoutPhones, n, rules) : null;
         if (!isPrice) report(r, 'price', `montant « ${n.raw} » différent du prix de la fiche${sheet.price === undefined ? ', qui n’en indique pas' : ''}`);
-        else if (qualifier) report(r, 'price', `« ${qualifier} » : la fiche ne dit pas si le prix est HT ou TTC`);
       } else {
         const quantity = quantityOf(r);
         if (quantity ? hasQuantity(quantity) : isAllowed(n.value)) continue;
+        // A range's unit is a guess ("une 2022 à 43 500 km"): the number alone may do.
+        if (r.ranged && isAllowed(n.value)) continue;
         if (quantity && isAllowed(n.value)) report(r, 'number', `« ${quoted(r, withoutPhones)} » ne figure pas dans la fiche`);
         else if (n.parts?.every(isAllowed)) report(r, 'number', `« ${n.raw} » se lit comme un seul nombre : sépare les nombres par un mot ou une virgule`);
         else report(r, 'number', `« ${n.raw} » ne figure pas dans la fiche`);
@@ -830,6 +879,9 @@ function checkScript(script: VideoScript, variant: Variant, sheet: Sheet): Probl
     const at = (m: RegExpExecArray) => text.slice(m.index, m.index + m[0].length);
     const spelled = rules.spelledNumbers.exec(unnamed);
     if (spelled) add(where, 'number', `« ${at(spelled)} » : écris les nombres en chiffres pour qu’ils soient vérifiables`);
+    // Anywhere in a text that says the price: "22 490 € HT", "Prix hors taxes de 22 490 €".
+    const qualifier = variant === 'social' && saysPrice ? rules.priceQualifier.exec(unnamed) : null;
+    if (qualifier) add(where, 'price', `« ${at(qualifier)} » : la fiche ne dit pas si le prix est HT ou TTC`);
     if (variant === 'listing') {
       const money = rules.priceWords.exec(unnamed);
       if (money) add(where, 'price', `« ${at(money)} » : ni prix ni devise dans la variante annonce`);
@@ -847,9 +899,12 @@ function checkScript(script: VideoScript, variant: Variant, sheet: Sheet): Probl
     }
 
     // (e) claims that need evidence in the sheet. Overlapping matches are reported once.
+    // An equipment or feature said as listed is not a quality: "Capteur de luminosité".
+    const unlisted = blankOut(unnamed, itemLabels);
     const reported: [number, number][] = [];
     for (const rule of rules.claims) {
-      const m = rule.pattern.exec(rule.ignore ? blankMatches(unnamed, rule.ignore) : unnamed);
+      const read = rule.source === 'free' ? unlisted : unnamed;
+      const m = rule.pattern.exec(rule.ignore ? blankMatches(read, rule.ignore) : read);
       if (!m || supported(rule)) continue;
       const [start, end] = [m.index, m.index + m[0].length];
       if (reported.some(([s, e]) => start < e && s < end)) continue;

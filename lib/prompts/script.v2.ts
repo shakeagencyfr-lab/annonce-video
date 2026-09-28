@@ -63,7 +63,7 @@ const SHEET_TRAPS: Record<Vertical, string> = {
 };
 
 const FORBIDDEN: Record<Vertical, string> = {
-  auto: '« état impeccable », « entretien suivi », « faible consommation », « idéal pour la famille », « jamais accidentée », « première main », « fiable », « spacieuse », « rare », « à saisir »',
+  auto: '« état impeccable », « entretien suivi », « faible consommation », « idéal pour la famille », « jamais accidentée », « première main », « moins de 3 ans », « fiable », « spacieuse », « rare », « à saisir »',
   immo: '« lumineux », « calme », « sans vis-à-vis », « refait à neuf », « proche des commerces », « quartier recherché », « idéal pour la famille », « rare », « à saisir »',
 };
 

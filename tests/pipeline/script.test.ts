@@ -65,7 +65,7 @@ describe('writeScripts', () => {
 
     // Rule 3 is spelled out, with the forbidden inventions.
     expect(params.system).toContain('Règle absolue : aucune invention.');
-    for (const invented of ['« état impeccable »', '« entretien suivi »', '« faible consommation »', '« idéal pour la famille »']) {
+    for (const invented of ['« état impeccable »', '« entretien suivi »', '« faible consommation »', '« idéal pour la famille »', '« moins de 3 ans »']) {
       expect(params.system).toContain(invented);
     }
     expect(params.system).toContain('en français');
