@@ -168,7 +168,9 @@ export async function renderVideos(options: RenderOptions): Promise<RenderResult
     for (const job of jobs) {
       const { outputPath } = job;
       const started = Date.now();
-      const voice = job.props.voiceSrc ? levels.get(job.props.voiceSrc) : undefined;
+      // A volume set by the props wins, even when another job measured the same file.
+      const src = job.props.voiceVolume === undefined ? job.props.voiceSrc : undefined;
+      const voice = src ? levels.get(src) : undefined;
       // Rounded: Remotion writes the volume into an ffmpeg filter.
       const props: VideoProps = voice ? { ...job.props, voiceVolume: Number(dbToGain(voice.gainDb).toFixed(3)) } : job.props;
       const inputProps: Record<string, unknown> = props;

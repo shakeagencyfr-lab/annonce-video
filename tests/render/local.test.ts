@@ -145,6 +145,20 @@ describe('renderVideos', () => {
     expect(quietVoice).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the volume set by the props of a job when another job measures the same voice', async () => {
+    const set = props('9x16', { voiceSrc: 'voix.mp3', voiceVolume: 0.8 });
+    const unset = props('16x9', { voiceSrc: 'voix.mp3' });
+    const jobs = [
+      { props: set, outputPath: join(root, 'a.mp4') },
+      { props: unset, outputPath: join(root, 'b.mp4') },
+    ];
+    const results = await renderVideos({ jobs, publicDir, measureVoice: quietVoice });
+    expect(quietVoice).toHaveBeenCalledTimes(1);
+    expect(remotion.renderMedia.mock.calls.map(([o]) => o.inputProps.voiceVolume)).toEqual([0.8, 1.445]);
+    expect(results[0]?.voice).toBeUndefined();
+    expect(results[1]?.voice?.gainDb).toBeCloseTo(3.2, 6);
+  });
+
   it('fails before bundling when the voice cannot be measured', async () => {
     const jobs = [{ props: props('9x16', { voiceSrc: 'voix.mp3' }), outputPath: join(root, 'a.mp4') }];
     const broken = vi.fn(async () => {
