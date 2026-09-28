@@ -143,6 +143,9 @@ export async function makeVideo(options: MakeVideoOptions, deps: MakeVideoDeps =
     const downloaded = await downloadPhotos(sheet, publicDir);
     photos = downloaded.photos;
     for (const f of downloaded.failures) warnings.push(`photo ${f.index} non téléchargée : ${f.reason}`);
+    if (sheet.photos.length > MAX_PHOTOS) {
+      warnings.push(`${sheet.photos.length - MAX_PHOTOS} photo(s) au-delà des ${MAX_PHOTOS} premières : non proposées au tri`);
+    }
     log(`    ${photos.length} photo(s) téléchargée(s), ${downloaded.failures.length} échec(s)`);
   }
   if (photos.length === 0) throw new Error('Aucune photo utilisable : impossible de faire une vidéo');

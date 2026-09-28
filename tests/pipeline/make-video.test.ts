@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeVideo, type MakeVideoDeps } from '@/lib/pipeline/make-video';
+import { MAX_PHOTOS } from '@/lib/pipeline/photos';
 import type { Variant, VideoScript, Voiceover } from '@/lib/pipeline/types';
 import { estimateVoiceover } from '@/lib/pipeline/voice';
 import type { RenderOptions } from '@/lib/render/local';
@@ -185,6 +186,32 @@ describe('makeVideo (online path, with fakes)', () => {
     const rejected = logs.filter((l) => l.includes('écartée')).map((l) => Number(/écartée (\d+)/.exec(l)?.[1]));
     expect(rejected).toEqual(Array.from({ length: 23 }, (_, i) => i).filter((i) => !kept.includes(i)));
     expect(logs).toContain('    écartée 22 : hors de l’échantillon régulier retenu (mode hors ligne)');
+  });
+
+  it('says when the listing has more photos than the sort is offered', async () => {
+    const sheet = JSON.parse(await readFile(SHEET, 'utf8')) as { photos: { url: string }[] };
+    sheet.photos = Array.from({ length: MAX_PHOTOS + 2 }, (_, i) => ({ url: `https://cdn.example.fr/photos/${i}.jpg` }));
+    const source = join(dir, 'many-photos.json');
+    await writeFile(source, JSON.stringify(sheet));
+    const img = await sharp({ create: { width: 320, height: 240, channels: 3, background: '#468' } }).jpeg().toBuffer();
+    const fetched: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL) => {
+        fetched.push(String(input));
+        return new Response(new Uint8Array(img), { status: 200, headers: { 'content-type': 'image/jpeg' } });
+      }),
+    );
+    try {
+      const result = await makeVideo(
+        { source, language: 'fr', outRoot: join(dir, 'out'), offline: true, preview: false, variants: ['listing'], log: () => {} },
+        fakes().deps,
+      );
+      expect(fetched).toHaveLength(MAX_PHOTOS);
+      expect(result.warnings).toContain(`2 photo(s) au-delà des ${MAX_PHOTOS} premières : non proposées au tri`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('warns when a voice is outside the target duration, bounds included in the target', async () => {
