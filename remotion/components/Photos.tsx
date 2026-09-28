@@ -19,7 +19,8 @@ type Photo = VideoProps['photos'][number];
 
 /**
  * The photos one after the other, each with a slow zoom, crossfading into the next.
- * All of them are shown before the end card; the last one holds under it.
+ * Each photo shown comes before the end card, and the last one holds under it; a video
+ * too short for all of them leaves out the last ones (photoTrackSchedule).
  */
 export function PhotoTrack({ photos }: { photos: Photo[] }) {
   const { durationInFrames, fps } = useVideoConfig();
